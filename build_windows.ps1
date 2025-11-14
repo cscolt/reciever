@@ -58,22 +58,36 @@ python -m pip install --upgrade pip
 Write-Host ""
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 Write-Host "This may take several minutes..." -ForegroundColor Gray
+Write-Host ""
 
-$installResult = pip install -r requirements.txt 2>&1
+# First try with flexible requirements
+if (Test-Path "requirements-flexible.txt") {
+    Write-Host "Using flexible requirements for Python 3.12+ compatibility..." -ForegroundColor Gray
+    pip install -r requirements-flexible.txt
+} else {
+    pip install -r requirements.txt
+}
+
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
     Write-Host "ERROR: Failed to install dependencies!" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
     Write-Host ""
     Write-Host "Common causes:" -ForegroundColor Yellow
     Write-Host "1. Missing Visual Studio Build Tools" -ForegroundColor Yellow
     Write-Host "   Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor Yellow
     Write-Host "   Install 'Desktop development with C++' workload" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "2. Python version too new (3.14+)" -ForegroundColor Yellow
-    Write-Host "   Use Python 3.11 or 3.12 instead" -ForegroundColor Yellow
+    Write-Host "2. Python version compatibility" -ForegroundColor Yellow
+    Write-Host "   Python 3.11 or 3.12 recommended" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "3. Network issues" -ForegroundColor Yellow
     Write-Host "   Check your internet connection" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "To see detailed error, run manually:" -ForegroundColor Cyan
+    Write-Host "  .\venv_build\Scripts\Activate.ps1" -ForegroundColor White
+    Write-Host "  pip install -r requirements.txt" -ForegroundColor White
     Write-Host ""
     exit 1
 }

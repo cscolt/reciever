@@ -51,6 +51,14 @@ class StreamViewer:
         self.stream_frames = {}
         self.stream_labels = {}
         self.stream_name_labels = {}
+        self.stream_container = None
+        self.current_stream_count = 0
+
+        # Expanded view state
+        self.expanded_client_id = None
+        self.expanded_frame = None
+        self.expanded_label = None
+
         self.create_stream_grid()
 
         # Server status
@@ -130,30 +138,75 @@ class StreamViewer:
         )
         info_btn.pack(side=tk.RIGHT, padx=5, pady=10)
 
-    def create_stream_grid(self):
-        """Create a 2x4 grid for displaying streams"""
+    def create_stream_grid(self, client_ids=None):
+        """Create a dynamic grid for displaying only connected streams"""
+        # Destroy existing container if it exists
+        if self.stream_container:
+            self.stream_container.destroy()
+
+        # Clear dictionaries
+        self.stream_frames.clear()
+        self.stream_labels.clear()
+        self.stream_name_labels.clear()
+
+        # If no clients, show a message
+        if not client_ids:
+            self.stream_container = tk.Frame(self.root, bg="#1e1e1e")
+            self.stream_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+            no_stream_label = tk.Label(
+                self.stream_container,
+                text="No active connections\n\nWaiting for Chromebooks to connect...",
+                font=("Arial", 16),
+                fg="#7f8c8d",
+                bg="#1e1e1e"
+            )
+            no_stream_label.pack(expand=True)
+            self.current_stream_count = 0
+            return
+
+        num_streams = len(client_ids)
+        self.current_stream_count = num_streams
+
+        # Calculate grid dimensions (try to make it as square as possible)
+        if num_streams == 1:
+            rows, cols = 1, 1
+        elif num_streams == 2:
+            rows, cols = 1, 2
+        elif num_streams <= 4:
+            rows, cols = 2, 2
+        elif num_streams <= 6:
+            rows, cols = 2, 3
+        elif num_streams <= 9:
+            rows, cols = 3, 3
+        elif num_streams <= 12:
+            rows, cols = 3, 4
+        else:
+            rows, cols = 4, 4
+
         container = tk.Frame(self.root, bg="#1e1e1e")
         container.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        self.stream_container = container
 
         # Configure grid weights for responsive layout
-        for i in range(2):  # 2 rows
+        for i in range(rows):
             container.grid_rowconfigure(i, weight=1)
-        for i in range(4):  # 4 columns
+        for i in range(cols):
             container.grid_columnconfigure(i, weight=1)
 
-        # Create 8 stream slots
-        for i in range(8):
-            row = i // 4
-            col = i % 4
+        # Create slots for each connected stream
+        for idx, client_id in enumerate(client_ids):
+            row = idx // cols
+            col = idx % cols
 
             # Create frame for each stream
-            frame = tk.Frame(container, bg="#2d2d2d", relief=tk.RAISED, borderwidth=2)
+            frame = tk.Frame(container, bg="#2d2d2d", relief=tk.RAISED, borderwidth=2, cursor="hand2")
             frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
             # Name label
             name_label = tk.Label(
                 frame,
-                text=f"Slot {i+1}: Waiting...",
+                text=f"Connecting...",
                 font=("Arial", 11, "bold"),
                 fg="#95a5a6",
                 bg="#2d2d2d",
@@ -162,22 +215,96 @@ class StreamViewer:
             name_label.pack(fill=tk.X, padx=5, pady=5)
 
             # Video display label
-            label = tk.Label(frame, bg="#000000")
+            label = tk.Label(frame, bg="#000000", cursor="hand2")
             label.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
 
             # Status label
             status_label = tk.Label(
                 frame,
-                text="No connection",
+                text="Connecting...",
                 font=("Arial", 9),
                 fg="#7f8c8d",
                 bg="#2d2d2d"
             )
             status_label.pack(fill=tk.X, padx=5, pady=(0, 5))
 
-            self.stream_frames[i] = frame
-            self.stream_labels[i] = label
-            self.stream_name_labels[i] = (name_label, status_label)
+            # Store references with client_id as key
+            self.stream_frames[client_id] = frame
+            self.stream_labels[client_id] = label
+            self.stream_name_labels[client_id] = (name_label, status_label)
+
+            # Bind click event to expand this stream
+            frame.bind("<Button-1>", lambda e, cid=client_id: self.toggle_expand(cid))
+            label.bind("<Button-1>", lambda e, cid=client_id: self.toggle_expand(cid))
+            name_label.bind("<Button-1>", lambda e, cid=client_id: self.toggle_expand(cid))
+            status_label.bind("<Button-1>", lambda e, cid=client_id: self.toggle_expand(cid))
+
+    def toggle_expand(self, client_id):
+        """Toggle expanded view for a stream"""
+        if self.expanded_client_id == client_id:
+            # Already expanded, collapse it
+            self.collapse_stream()
+        else:
+            # Expand this stream
+            self.expand_stream(client_id)
+
+    def expand_stream(self, client_id):
+        """Expand a stream to full window"""
+        # Store current state
+        self.expanded_client_id = client_id
+
+        # Destroy the grid container
+        if self.stream_container:
+            self.stream_container.destroy()
+
+        # Create expanded view
+        container = tk.Frame(self.root, bg="#1e1e1e")
+        container.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+        self.stream_container = container
+
+        # Create frame for expanded stream
+        frame = tk.Frame(container, bg="#2d2d2d", relief=tk.RAISED, borderwidth=2, cursor="hand2")
+        frame.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
+
+        # Get stream data
+        streams = stream_manager.get_all_streams()
+        stream_data = streams.get(client_id, {})
+        name = stream_data.get('name', 'Unknown')
+
+        # Name label
+        name_label = tk.Label(
+            frame,
+            text=f"{name} (click to minimize)",
+            font=("Arial", 16, "bold"),
+            fg="#3498db",
+            bg="#2d2d2d",
+            anchor="w"
+        )
+        name_label.pack(fill=tk.X, padx=10, pady=10)
+
+        # Video display label
+        label = tk.Label(frame, bg="#000000", cursor="hand2")
+        label.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
+
+        # Bind click to collapse
+        frame.bind("<Button-1>", lambda e: self.collapse_stream())
+        label.bind("<Button-1>", lambda e: self.collapse_stream())
+        name_label.bind("<Button-1>", lambda e: self.collapse_stream())
+
+        # Store references
+        self.expanded_frame = frame
+        self.expanded_label = label
+
+    def collapse_stream(self):
+        """Collapse expanded stream back to grid view"""
+        self.expanded_client_id = None
+        self.expanded_frame = None
+        self.expanded_label = None
+
+        # Rebuild the grid with current streams
+        streams = stream_manager.get_all_streams()
+        client_ids = sorted(streams.keys())
+        self.create_stream_grid(client_ids)
 
     def toggle_server(self):
         """Start or stop the server"""
@@ -269,26 +396,30 @@ class StreamViewer:
         try:
             streams = stream_manager.get_all_streams()
             active_count = len(streams)
-
-            # Update count
-            self.count_label.config(text=f"Active Streams: {active_count}/8")
-
-            # Get client IDs in sorted order
             client_ids = sorted(streams.keys())
 
-            # Update each slot
-            for slot_idx in range(8):
-                if slot_idx < len(client_ids):
-                    client_id = client_ids[slot_idx]
-                    stream_data = streams[client_id]
-                    frame = stream_data['frame']
-                    name = stream_data['name']
+            # Update count label
+            self.count_label.config(text=f"Active Streams: {active_count}")
 
-                    if frame is not None:
+            # Check if we need to rebuild the grid (stream count changed)
+            if not self.expanded_client_id and active_count != self.current_stream_count:
+                self.create_stream_grid(client_ids if active_count > 0 else None)
+
+            # If in expanded view, update only the expanded stream
+            if self.expanded_client_id:
+                # Check if expanded stream still exists
+                if self.expanded_client_id not in streams:
+                    # Stream disconnected, collapse back to grid
+                    self.collapse_stream()
+                else:
+                    # Update the expanded view
+                    stream_data = streams[self.expanded_client_id]
+                    frame = stream_data['frame']
+
+                    if frame is not None and self.expanded_label:
                         # Resize frame to fit label
-                        label = self.stream_labels[slot_idx]
-                        label_width = label.winfo_width() or 400
-                        label_height = label.winfo_height() or 300
+                        label_width = self.expanded_label.winfo_width() or 800
+                        label_height = self.expanded_label.winfo_height() or 600
 
                         # Calculate scaling to fit while maintaining aspect ratio
                         h, w = frame.shape[:2]
@@ -305,26 +436,51 @@ class StreamViewer:
                             img_tk = ImageTk.PhotoImage(image=img)
 
                             # Update label
-                            label.configure(image=img_tk)
-                            label.image = img_tk  # Keep a reference
+                            self.expanded_label.configure(image=img_tk)
+                            self.expanded_label.image = img_tk  # Keep a reference
+            else:
+                # Grid view - update all streams
+                for client_id in client_ids:
+                    if client_id in self.stream_labels:
+                        stream_data = streams[client_id]
+                        frame = stream_data['frame']
+                        name = stream_data['name']
 
-                        # Update name
-                        name_label, status_label = self.stream_name_labels[slot_idx]
-                        name_label.config(text=f"Slot {slot_idx+1}: {name}", fg="#3498db")
-                        status_label.config(text="● Connected", fg="#27ae60")
-                    else:
-                        # No frame yet
-                        name_label, status_label = self.stream_name_labels[slot_idx]
-                        name_label.config(text=f"Slot {slot_idx+1}: {name}", fg="#3498db")
-                        status_label.config(text="Connecting...", fg="#f39c12")
-                else:
-                    # Empty slot
-                    name_label, status_label = self.stream_name_labels[slot_idx]
-                    name_label.config(text=f"Slot {slot_idx+1}: Waiting...", fg="#95a5a6")
-                    status_label.config(text="No connection", fg="#7f8c8d")
+                        if frame is not None:
+                            # Resize frame to fit label
+                            label = self.stream_labels[client_id]
+                            label_width = label.winfo_width() or 400
+                            label_height = label.winfo_height() or 300
 
-                    # Clear image
-                    self.stream_labels[slot_idx].configure(image='')
+                            # Calculate scaling to fit while maintaining aspect ratio
+                            h, w = frame.shape[:2]
+                            scale = min(label_width / w, label_height / h)
+                            new_w = int(w * scale * 0.95)
+                            new_h = int(h * scale * 0.95)
+
+                            if new_w > 0 and new_h > 0:
+                                resized = cv2.resize(frame, (new_w, new_h))
+
+                                # Convert to PIL Image
+                                img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+                                img = Image.fromarray(img)
+                                img_tk = ImageTk.PhotoImage(image=img)
+
+                                # Update label
+                                label.configure(image=img_tk)
+                                label.image = img_tk  # Keep a reference
+
+                            # Update name and status
+                            if client_id in self.stream_name_labels:
+                                name_label, status_label = self.stream_name_labels[client_id]
+                                name_label.config(text=f"{name}", fg="#3498db")
+                                status_label.config(text="● Connected", fg="#27ae60")
+                        else:
+                            # No frame yet
+                            if client_id in self.stream_name_labels:
+                                name_label, status_label = self.stream_name_labels[client_id]
+                                name_label.config(text=f"{name}", fg="#3498db")
+                                status_label.config(text="Connecting...", fg="#f39c12")
 
         except Exception as e:
             print(f"Error updating streams: {e}")
