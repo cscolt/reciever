@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desktop Casting Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(231, 76, 60, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .status-success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .preview {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .preview.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖥️ Desktop Casting</h1>
+        <p class="subtitle">Share your screen with the monitoring station</p>
+
+        <div id="status" class="status hidden"></div>
+
+        <div class="input-group">
+            <label for="clientName">Your Name / Device Name</label>
+            <input type="text" id="clientName" placeholder="e.g., John's Chromebook" value="">
+        </div>
+
+        <button id="startBtn" class="btn-primary" onclick="startCasting()">
+            Start Sharing Screen
+        </button>
+
+        <button id="stopBtn" class="btn-danger hidden" onclick="stopCasting()">
+            Stop Sharing
+        </button>
+
+        <video id="preview" class="preview" autoplay muted></video>
+    </div>
+
+    <script>
+        let peerConnection = null;
+        let clientId = null;
+        let localStream = null;
+
+        // Generate a unique client ID
+        function generateClientId() {
+            return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status status-${type}`;
+            statusDiv.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            document.getElementById('status').classList.add('hidden');
+        }
+
+        async function startCasting() {
+            try {
+                const clientName = document.getElementById('clientName').value.trim() || 'Anonymous';
+                clientId = generateClientId();
+
+                // Check if getDisplayMedia is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    throw new Error('Screen sharing is not supported. This page must be accessed via HTTPS or from localhost.');
+                }
+
+                showStatus('Requesting screen access...', 'info');
+
+                // Request screen capture with audio
+                localStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: "always",
+                        displaySurface: "monitor"
+                    },
+                    audio: false
+                });
+
+                // Show preview
+                const preview = document.getElementById('preview');
+                preview.srcObject = localStream;
+                preview.classList.add('active');
+
+                showStatus('Connecting to monitoring station...', 'info');
+
+                // Create peer connection
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                });
+
+                // Add tracks to peer connection
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Create offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                // Send offer to server
+                const response = await fetch('/offer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sdp: offer.sdp,
+                        type: offer.type,
+                        client_id: clientId,
+                        client_name: clientName
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to connect');
+                }
+
+                const answer = await response.json();
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+
+                showStatus(`✓ Connected! Sharing as "${clientName}"`, 'success');
+
+                // Update UI
+                document.getElementById('startBtn').classList.add('hidden');
+                document.getElementById('stopBtn').classList.remove('hidden');
+                document.getElementById('clientName').disabled = true;
+
+                // Handle stream end
+                localStream.getVideoTracks()[0].addEventListener('ended', () => {
+                    stopCasting();
+                });
+
+            } catch (error) {
+                console.error('Error starting cast:', error);
+                showStatus('Error: ' + error.message, 'error');
+                cleanup();
+            }
+        }
+
+        async function stopCasting() {
+            try {
+                if (clientId) {
+                    await fetch('/disconnect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ client_id: clientId })
+                    });
+                }
+
+                showStatus('Disconnected', 'info');
+            } catch (error) {
+                console.error('Error disconnecting:', error);
+            }
+
+            cleanup();
+        }
+
+        function cleanup() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            document.getElementById('preview').classList.remove('active');
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.add('hidden');
+            document.getElementById('clientName').disabled = false;
+            clientId = null;
+        }
+
+        // Set default name based on hostname
+        window.addEventListener('load', () => {
+            const hostname = window.location.hostname;
+            document.getElementById('clientName').value = `Device at ${hostname}`;
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (clientId) {
+                navigator.sendBeacon('/disconnect', JSON.stringify({ client_id: clientId }));
+            }
+        });
+    </script>
+</body>
+</html>

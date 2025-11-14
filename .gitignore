@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+venv_*/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# PyInstaller
+*.spec~
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+build_log.txt
+
+# Build artifacts
+windows binary/
+
+# Test files
+test_*.py
+
+# SSL Certificates
+*.pem
+cert.pem
+key.pem
