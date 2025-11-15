@@ -48,7 +48,7 @@ if (-not $opensslPath) {
     Write-Host ""
     Write-Host "Generating certificates with Python..." -ForegroundColor Yellow
 
-    $pythonScript = @"
+    $pythonScript = @'
 import ssl
 import socket
 from datetime import datetime, timedelta
@@ -126,7 +126,7 @@ except ImportError:
 except Exception as e:
     print(f"ERROR: {e}")
     exit(1)
-"@
+'@
 
     $pythonScript | Out-File -Encoding UTF8 "temp_cert_gen.py"
 

@@ -120,14 +120,135 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Executable location:" -ForegroundColor Cyan
     Write-Host "  .\dist\DesktopCastingReceiver\DesktopCastingReceiver.exe" -ForegroundColor White
     Write-Host ""
-    Write-Host "To run:" -ForegroundColor Cyan
+
+    # Offer to set up SSL certificates
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "Optional: SSL Certificate Setup" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "SSL certificates enable HTTPS connections, which are required for:" -ForegroundColor Yellow
+    Write-Host "  - Screen sharing on many browsers" -ForegroundColor White
+    Write-Host "  - Camera access on mobile devices" -ForegroundColor White
+    Write-Host "  - AirPlay screen mirroring from iOS devices" -ForegroundColor White
+    Write-Host ""
+
+    $sslResponse = Read-Host "Would you like to generate SSL certificates now? (Y/n)"
+    if ($sslResponse -ne "n" -and $sslResponse -ne "N") {
+        Write-Host ""
+        Write-Host "Generating SSL certificates..." -ForegroundColor Yellow
+
+        # Check if cryptography is installed
+        python -c "import cryptography" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Installing cryptography package..." -ForegroundColor Gray
+            pip install cryptography
+        }
+
+        # Generate certificates using embedded Python script
+        $pythonScript = @'
+import socket
+import ipaddress
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+from datetime import datetime, timedelta
+import os
+
+# Generate private key
+private_key = rsa.generate_private_key(
+    public_exponent=65537,
+    key_size=2048,
+    backend=default_backend()
+)
+
+# Get hostname and IP
+hostname = socket.gethostname()
+try:
+    local_ip = socket.gethostbyname(hostname)
+except:
+    local_ip = '127.0.0.1'
+
+# Create certificate
+subject = issuer = x509.Name([
+    x509.NameAttribute(NameOID.COUNTRY_NAME, 'US'),
+    x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'State'),
+    x509.NameAttribute(NameOID.LOCALITY_NAME, 'City'),
+    x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Desktop Casting'),
+    x509.NameAttribute(NameOID.COMMON_NAME, local_ip),
+])
+
+cert = x509.CertificateBuilder().subject_name(
+    subject
+).issuer_name(
+    issuer
+).public_key(
+    private_key.public_key()
+).serial_number(
+    x509.random_serial_number()
+).not_valid_before(
+    datetime.utcnow()
+).not_valid_after(
+    datetime.utcnow() + timedelta(days=365)
+).add_extension(
+    x509.SubjectAlternativeName([
+        x509.DNSName(hostname),
+        x509.DNSName('localhost'),
+        x509.IPAddress(ipaddress.ip_address(local_ip)),
+    ]),
+    critical=False,
+).sign(private_key, hashes.SHA256(), default_backend())
+
+# Write to dist folder
+dist_path = r'.\dist\DesktopCastingReceiver'
+
+with open(os.path.join(dist_path, 'key.pem'), 'wb') as f:
+    f.write(private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    ))
+
+with open(os.path.join(dist_path, 'cert.pem'), 'wb') as f:
+    f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+print(f'SUCCESS|{local_ip}')
+'@
+
+        $tempScript = "temp_ssl_setup.py"
+        $pythonScript | Out-File -Encoding UTF8 $tempScript
+        $result = python $tempScript 2>&1
+        Remove-Item $tempScript -ErrorAction SilentlyContinue
+
+        if ($result -match 'SUCCESS\|(.+)') {
+            $localIP = $Matches[1]
+            Write-Host ""
+            Write-Host "SSL certificates created successfully!" -ForegroundColor Green
+            Write-Host "  cert.pem and key.pem in .\dist\DesktopCastingReceiver\" -ForegroundColor White
+            Write-Host ""
+            Write-Host "Your local IP: $localIP" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "Devices can connect via:" -ForegroundColor Yellow
+            Write-Host "  https://$localIP:8080" -ForegroundColor White
+            Write-Host ""
+        } else {
+            Write-Host "Warning: SSL certificate generation failed" -ForegroundColor Yellow
+            Write-Host "You can generate them later using: .\setup_ssl_for_exe.ps1" -ForegroundColor Gray
+        }
+    }
+
+    Write-Host ""
+    Write-Host "To run the application:" -ForegroundColor Cyan
     Write-Host "  cd dist\DesktopCastingReceiver" -ForegroundColor White
     Write-Host "  .\DesktopCastingReceiver.exe" -ForegroundColor White
     Write-Host ""
 
     # Offer to run the executable
-    $response = Read-Host "Would you like to run the executable now? (y/N)"
-    if ($response -eq "y" -or $response -eq "Y") {
+    $runResponse = Read-Host "Would you like to run the executable now? (y/N)"
+    if ($runResponse -eq "y" -or $runResponse -eq "Y") {
         Write-Host ""
         Write-Host "Starting Desktop Casting Receiver..." -ForegroundColor Green
         Start-Process ".\dist\DesktopCastingReceiver\DesktopCastingReceiver.exe"

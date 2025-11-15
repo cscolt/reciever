@@ -2,6 +2,7 @@
 """
 Desktop Casting Receiver Server
 Handles WebRTC connections from Chromebooks and manages screen streaming
+Supports AirPlay mirroring from iOS devices
 """
 
 import asyncio
@@ -19,6 +20,10 @@ import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Global AirPlay receiver instances (will be initialized in run_server)
+airplay_receiver = None
+uxplay_integration = None
 
 # Helper function to get base path (works in both dev and PyInstaller)
 def get_base_path():
@@ -49,22 +54,43 @@ class StreamManager:
         self.lock = Lock()
         self.pcs = {}  # {client_id: RTCPeerConnection}
 
-    def add_stream(self, client_id, name):
+    def add_stream(self, client_id, name_or_frame, name=None):
+        """
+        Add a new stream. Supports two signatures:
+        - add_stream(client_id, name) for WebRTC streams
+        - add_stream(client_id, frame, name) for AirPlay streams
+        """
         with self.lock:
             if len(self.streams) >= self.max_streams:
                 return False
-            self.streams[client_id] = {
-                'frame': None,
-                'name': name,
-                'timestamp': time.time()
-            }
+
+            # Determine if this is WebRTC (name_or_frame is string) or AirPlay (name_or_frame is frame)
+            if isinstance(name_or_frame, str):
+                # WebRTC style: add_stream(client_id, name)
+                self.streams[client_id] = {
+                    'frame': None,
+                    'name': name_or_frame,
+                    'timestamp': time.time()
+                }
+            else:
+                # AirPlay style: add_stream(client_id, frame, name)
+                self.streams[client_id] = {
+                    'frame': name_or_frame,
+                    'name': name if name else 'AirPlay Device',
+                    'timestamp': time.time()
+                }
             return True
 
     def update_frame(self, client_id, frame):
+        """Update frame for a stream (WebRTC interface)"""
         with self.lock:
             if client_id in self.streams:
                 self.streams[client_id]['frame'] = frame
                 self.streams[client_id]['timestamp'] = time.time()
+
+    def update_stream(self, client_id, frame):
+        """Update frame for a stream (AirPlay interface - alias for update_frame)"""
+        self.update_frame(client_id, frame)
 
     def remove_stream(self, client_id):
         with self.lock:
@@ -231,8 +257,10 @@ def create_app():
     return app
 
 
-def run_server(host='0.0.0.0', port=8080, use_ssl=True):
-    """Run the server"""
+def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True):
+    """Run the server with optional AirPlay support"""
+    global airplay_receiver
+
     app = create_app()
 
     ssl_context = None
@@ -249,17 +277,70 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True):
             ssl_context.load_cert_chain(cert_file, key_file)
             protocol = "https"
             logger.info(f"Starting server on https://{host}:{port}")
-            logger.info(f"Chromebooks should visit https://<this-computer-ip>:{port}")
+            logger.info(f"Devices should visit https://<this-computer-ip>:{port}")
             logger.info("Note: You'll need to accept the self-signed certificate warning in the browser")
         else:
             logger.warning("SSL certificates not found, falling back to HTTP")
             logger.info(f"Starting server on http://{host}:{port}")
-            logger.info(f"Chromebooks should visit http://<this-computer-ip>:{port}")
+            logger.info(f"Devices should visit http://<this-computer-ip>:{port}")
     else:
         logger.info(f"Starting server on http://{host}:{port}")
-        logger.info(f"Chromebooks should visit http://<this-computer-ip>:{port}")
+        logger.info(f"Devices should visit http://<this-computer-ip>:{port}")
+
+    # Start AirPlay receiver if enabled
+    # Try UxPlay first (provides actual iOS screen mirroring), fall back to Python implementation
+    if enable_airplay:
+        global uxplay_integration
+        uxplay_started = False
+
+        # Try UxPlay integration first (C/C++ implementation with real screen mirroring)
+        try:
+            from uxplay_integration import UxPlayIntegration
+            uxplay = UxPlayIntegration(stream_manager, name="Desktop Casting Receiver")
+
+            if uxplay.is_uxplay_available():
+                logger.info("UxPlay detected - attempting to start iOS screen mirroring service")
+                if uxplay.start():
+                    uxplay_integration = uxplay
+                    uxplay_started = True
+                    logger.info("✓ UxPlay started successfully - iOS devices can mirror via AirPlay")
+                    logger.info("  Open Control Center on iPhone/iPad → Screen Mirroring → 'Desktop Casting Receiver'")
+                else:
+                    logger.warning("UxPlay failed to start, will try Python AirPlay fallback")
+            else:
+                logger.info("UxPlay not installed - will use Python AirPlay infrastructure")
+                logger.info("  For best iOS experience, install UxPlay: https://github.com/FDH2/UxPlay")
+        except ImportError:
+            logger.info("UxPlay integration module not found - using Python AirPlay infrastructure")
+        except Exception as e:
+            logger.warning(f"UxPlay integration error: {e}")
+
+        # Fall back to Python AirPlay implementation if UxPlay didn't start
+        if not uxplay_started:
+            try:
+                from airplay_receiver import AirPlayReceiver
+                airplay_receiver = AirPlayReceiver(stream_manager, name="Desktop Casting Receiver", port=7000)
+                airplay_receiver.start()
+                logger.info("Python AirPlay receiver started - iOS devices can discover this receiver")
+                logger.info("  Note: Cryptographic pairing not fully implemented - use camera streaming fallback")
+                logger.info("  Camera fallback: Connect via browser at http://<this-computer-ip>:8080")
+            except ImportError as e:
+                logger.warning(f"AirPlay support not available (missing dependency: {e})")
+                logger.warning("Install 'zeroconf' package for AirPlay support: pip install zeroconf")
+            except Exception as e:
+                logger.error(f"Failed to start AirPlay receiver: {e}")
+
+        logger.info("WebRTC camera streaming available for all mobile devices at the web interface")
 
     web.run_app(app, host=host, port=port, ssl_context=ssl_context, handle_signals=False)
+
+    # Cleanup AirPlay on exit
+    if uxplay_integration:
+        logger.info("Stopping UxPlay...")
+        uxplay_integration.stop()
+    if airplay_receiver:
+        logger.info("Stopping Python AirPlay receiver...")
+        airplay_receiver.stop()
 
 
 if __name__ == '__main__':

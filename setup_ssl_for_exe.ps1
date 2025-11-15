@@ -36,7 +36,7 @@ if ($LASTEXITCODE -ne 0) {
 # Step 3: Generate certificates
 Write-Host "Generating SSL certificates..." -ForegroundColor Yellow
 
-$pythonScript = @"
+$pythonScript = @'
 import socket
 import ipaddress
 from cryptography import x509
@@ -106,7 +106,7 @@ with open(os.path.join(dist_path, 'cert.pem'), 'wb') as f:
     f.write(cert.public_bytes(serialization.Encoding.PEM))
 
 print(f'SUCCESS|{local_ip}')
-"@
+'@
 
 $tempScript = "temp_ssl_setup.py"
 $pythonScript | Out-File -Encoding UTF8 $tempScript

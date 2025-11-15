@@ -151,14 +151,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>🖥️ Desktop Casting</h1>
-        <p class="subtitle">Share your screen with the monitoring station</p>
+        <h1 id="appTitle">🖥️ Desktop Casting</h1>
+        <p class="subtitle" id="appSubtitle">Share your screen with the monitoring station</p>
 
         <div id="status" class="status hidden"></div>
 
         <div class="input-group">
             <label for="clientName">Your Name / Device Name</label>
             <input type="text" id="clientName" placeholder="e.g., John's Chromebook" value="">
+        </div>
+
+        <div id="captureMode" class="status status-info hidden" style="font-size: 13px;">
+            <strong>Mode:</strong> <span id="captureModeText">Screen Sharing</span>
         </div>
 
         <button id="startBtn" class="btn-primary" onclick="startCasting()">
@@ -169,13 +173,24 @@
             Stop Sharing
         </button>
 
-        <video id="preview" class="preview" autoplay muted></video>
+        <video id="preview" class="preview" autoplay muted playsinline></video>
     </div>
 
     <script>
         let peerConnection = null;
         let clientId = null;
         let localStream = null;
+        let captureMode = 'screen'; // 'screen' or 'camera'
+
+        // Detect if device is mobile
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
+        // Detect if iOS device
+        function isIOSDevice() {
+            return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        }
 
         // Generate a unique client ID
         function generateClientId() {
@@ -198,21 +213,59 @@
                 const clientName = document.getElementById('clientName').value.trim() || 'Anonymous';
                 clientId = generateClientId();
 
-                // Check if getDisplayMedia is available
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                    throw new Error('Screen sharing is not supported. This page must be accessed via HTTPS or from localhost.');
+                // Check if mediaDevices is available
+                if (!navigator.mediaDevices) {
+                    throw new Error('Media devices not supported. This page must be accessed via HTTPS or from localhost.');
                 }
 
-                showStatus('Requesting screen access...', 'info');
+                const isMobile = isMobileDevice();
+                const isIOS = isIOSDevice();
+                let streamAcquired = false;
 
-                // Request screen capture with audio
-                localStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: {
-                        cursor: "always",
-                        displaySurface: "monitor"
-                    },
-                    audio: false
-                });
+                // Try screen capture first (works on Android Chrome and desktop browsers)
+                if (!isIOS && navigator.mediaDevices.getDisplayMedia) {
+                    try {
+                        showStatus('Requesting screen access...', 'info');
+
+                        localStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {
+                                cursor: "always",
+                                displaySurface: isMobile ? "browser" : "monitor"
+                            },
+                            audio: false
+                        });
+
+                        captureMode = 'screen';
+                        document.getElementById('captureModeText').textContent = 'Screen Sharing';
+                        streamAcquired = true;
+                    } catch (screenError) {
+                        console.log('Screen capture not available or denied, trying camera fallback...', screenError);
+                        streamAcquired = false;
+                    }
+                }
+
+                // Fallback to camera for iOS or if screen sharing failed
+                if (!streamAcquired) {
+                    showStatus('Screen sharing not available. Requesting camera access...', 'info');
+
+                    try {
+                        localStream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                facingMode: 'environment', // Try to use back camera on mobile
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            },
+                            audio: false
+                        });
+
+                        captureMode = 'camera';
+                        document.getElementById('captureModeText').textContent = 'Camera Streaming';
+                        document.getElementById('captureMode').classList.remove('hidden');
+                        streamAcquired = true;
+                    } catch (cameraError) {
+                        throw new Error('Could not access camera: ' + cameraError.message);
+                    }
+                }
 
                 // Show preview
                 const preview = document.getElementById('preview');
@@ -247,7 +300,8 @@
                         sdp: offer.sdp,
                         type: offer.type,
                         client_id: clientId,
-                        client_name: clientName
+                        client_name: clientName,
+                        capture_mode: captureMode
                     })
                 });
 
@@ -259,12 +313,16 @@
                 const answer = await response.json();
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
 
-                showStatus(`✓ Connected! Sharing as "${clientName}"`, 'success');
+                const modeText = captureMode === 'camera' ? 'camera streaming' : 'screen sharing';
+                showStatus(`✓ Connected! ${modeText.charAt(0).toUpperCase() + modeText.slice(1)} as "${clientName}"`, 'success');
 
                 // Update UI
                 document.getElementById('startBtn').classList.add('hidden');
                 document.getElementById('stopBtn').classList.remove('hidden');
                 document.getElementById('clientName').disabled = true;
+                if (captureMode === 'screen') {
+                    document.getElementById('captureMode').classList.add('hidden');
+                }
 
                 // Handle stream end
                 localStream.getVideoTracks()[0].addEventListener('ended', () => {
@@ -313,13 +371,32 @@
             document.getElementById('startBtn').classList.remove('hidden');
             document.getElementById('stopBtn').classList.add('hidden');
             document.getElementById('clientName').disabled = false;
+            document.getElementById('captureMode').classList.add('hidden');
+            captureMode = 'screen';
             clientId = null;
         }
 
-        // Set default name based on hostname
+        // Initialize UI on page load
         window.addEventListener('load', () => {
+            const isMobile = isMobileDevice();
+            const isIOS = isIOSDevice();
+
+            // Set default device name
             const hostname = window.location.hostname;
-            document.getElementById('clientName').value = `Device at ${hostname}`;
+            let deviceType = 'Device';
+
+            if (isIOS) {
+                deviceType = 'iPhone/iPad';
+                document.getElementById('appTitle').textContent = '📱 Mobile Casting';
+                document.getElementById('appSubtitle').textContent = 'Share your camera with the monitoring station';
+                document.getElementById('startBtn').textContent = 'Start Camera Streaming';
+            } else if (isMobile) {
+                deviceType = 'Android Device';
+                document.getElementById('appTitle').textContent = '📱 Mobile Casting';
+                document.getElementById('appSubtitle').textContent = 'Share your screen or camera with the monitoring station';
+            }
+
+            document.getElementById('clientName').value = `${deviceType} at ${hostname}`;
         });
 
         // Cleanup on page unload
