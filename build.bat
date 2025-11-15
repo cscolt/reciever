@@ -6,10 +6,67 @@ echo Desktop Casting Receiver Builder
 echo ==================================
 echo.
 
+REM Find Windows Python installation
+echo Locating Windows Python...
+
+REM Prefer Python 3.12 over 3.14 due to better package compatibility
+set PYTHON_EXE=
+if exist "C:\Users\control\AppData\Local\Programs\Python\Python312\python.exe" (
+    set PYTHON_EXE=C:\Users\control\AppData\Local\Programs\Python\Python312\python.exe
+    goto :found_python
+)
+if exist "C:\Users\control\AppData\Local\Programs\Python\Python311\python.exe" (
+    set PYTHON_EXE=C:\Users\control\AppData\Local\Programs\Python\Python311\python.exe
+    goto :found_python
+)
+if exist "C:\Python312\python.exe" (
+    set PYTHON_EXE=C:\Python312\python.exe
+    goto :found_python
+)
+if exist "C:\Python311\python.exe" (
+    set PYTHON_EXE=C:\Python311\python.exe
+    goto :found_python
+)
+
+REM Try py launcher as fallback
+py -3.12 --version >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set PYTHON_EXE=py -3.12
+    goto :found_python
+)
+
+py -3.11 --version >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set PYTHON_EXE=py -3.11
+    goto :found_python
+)
+
+REM Last resort: use python in PATH
+python --version >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set PYTHON_EXE=python
+    goto :found_python
+)
+
+echo ERROR: Could not find Windows Python installation!
+echo.
+echo Please install Python 3.11 or 3.12 from:
+echo   https://www.python.org/downloads/
+echo.
+echo Make sure to check 'Add Python to PATH' during installation.
+pause
+exit /b 1
+
+:found_python
+for /f "tokens=*" %%i in ('%PYTHON_EXE% --version 2^>^&1') do set PYTHON_VERSION=%%i
+echo Found: %PYTHON_VERSION%
+echo Path: %PYTHON_EXE%
+echo.
+
 REM Check if virtual environment exists
 if not exist "venv" (
     echo Creating virtual environment...
-    python -m venv venv
+    %PYTHON_EXE% -m venv venv
 )
 
 REM Activate virtual environment

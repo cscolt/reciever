@@ -6,10 +6,69 @@ Write-Host "Desktop Casting Receiver - Windows Builder" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check Python version
-Write-Host "Checking Python installation..." -ForegroundColor Yellow
-$pythonVersion = & python --version 2>&1
+# Find Windows Python installation
+Write-Host "Locating Windows Python..." -ForegroundColor Yellow
+
+# Prefer Python 3.12 over 3.14 due to better package compatibility
+$pythonPaths = @(
+    "C:\Users\control\AppData\Local\Programs\Python\Python312\python.exe",
+    "C:\Users\control\AppData\Local\Programs\Python\Python311\python.exe",
+    "C:\Python312\python.exe",
+    "C:\Python311\python.exe"
+)
+
+$pythonExe = $null
+foreach ($path in $pythonPaths) {
+    if (Test-Path $path) {
+        $pythonExe = $path
+        break
+    }
+}
+
+# Also try py launcher as fallback
+if (-not $pythonExe) {
+    try {
+        $pyCheck = & py -3.12 --version 2>&1
+        if ($?) {
+            $pythonExe = "py -3.12"
+        }
+    } catch {}
+}
+
+if (-not $pythonExe) {
+    try {
+        $pyCheck = & py -3.11 --version 2>&1
+        if ($?) {
+            $pythonExe = "py -3.11"
+        }
+    } catch {}
+}
+
+# Last resort: use python in PATH (but verify it's not WSL)
+if (-not $pythonExe) {
+    try {
+        $pythonCheck = & python --version 2>&1
+        if ($pythonCheck -notmatch "usr/bin" -and $?) {
+            $pythonExe = "python"
+        }
+    } catch {}
+}
+
+if (-not $pythonExe) {
+    Write-Host "ERROR: Could not find Windows Python installation!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please install Python 3.11 or 3.12 from:" -ForegroundColor Yellow
+    Write-Host "  https://www.python.org/downloads/" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Make sure to check 'Add Python to PATH' during installation." -ForegroundColor Yellow
+    Write-Host ""
+    pause
+    exit 1
+}
+
+$pythonVersion = & $pythonExe --version 2>&1
 Write-Host "Found: $pythonVersion" -ForegroundColor Green
+Write-Host "Path: $pythonExe" -ForegroundColor Gray
 
 # Extract major.minor version
 if ($pythonVersion -match "Python (\d+)\.(\d+)") {
@@ -21,10 +80,8 @@ if ($pythonVersion -match "Python (\d+)\.(\d+)") {
         Write-Host "WARNING: Python 3.14+ detected!" -ForegroundColor Red
         Write-Host "Many packages don't have pre-built wheels for Python 3.14 yet." -ForegroundColor Red
         Write-Host ""
-        Write-Host "RECOMMENDED SOLUTIONS:" -ForegroundColor Yellow
-        Write-Host "1. Install Python 3.11 or 3.12 from https://www.python.org/downloads/" -ForegroundColor Yellow
-        Write-Host "2. Use py launcher: py -3.11 build_windows.ps1" -ForegroundColor Yellow
-        Write-Host "3. Install Visual Studio Build Tools (see README)" -ForegroundColor Yellow
+        Write-Host "RECOMMENDED: Use Python 3.12 instead" -ForegroundColor Yellow
+        Write-Host "Install from: https://www.python.org/downloads/" -ForegroundColor Yellow
         Write-Host ""
         $response = Read-Host "Continue anyway? Some packages may fail to install (y/N)"
         if ($response -ne "y" -and $response -ne "Y") {
@@ -44,15 +101,20 @@ if (Test-Path "venv_build") {
 }
 
 Write-Host "Creating new virtual environment..." -ForegroundColor Gray
-python -m venv venv_build
+& $pythonExe -m venv venv_build
+
+if (-not (Test-Path ".\venv_build\Scripts\python.exe")) {
+    Write-Host "ERROR: Failed to create virtual environment!" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "Activating virtual environment..." -ForegroundColor Gray
-& .\venv_build\Scripts\Activate.ps1
+$pythonExe = ".\venv_build\Scripts\python.exe"
 
 # Upgrade pip
 Write-Host ""
 Write-Host "Upgrading pip..." -ForegroundColor Yellow
-python -m pip install --upgrade pip
+& $pythonExe -m pip install --upgrade pip
 
 # Install dependencies
 Write-Host ""
@@ -63,9 +125,9 @@ Write-Host ""
 # First try with flexible requirements
 if (Test-Path "requirements-flexible.txt") {
     Write-Host "Using flexible requirements for Python 3.12+ compatibility..." -ForegroundColor Gray
-    pip install -r requirements-flexible.txt
+    & $pythonExe -m pip install -r requirements-flexible.txt
 } else {
-    pip install -r requirements.txt
+    & $pythonExe -m pip install -r requirements.txt
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -109,7 +171,7 @@ Write-Host ""
 Write-Host "Building executable with PyInstaller..." -ForegroundColor Yellow
 Write-Host "This may take several minutes..." -ForegroundColor Gray
 
-pyinstaller desktop_caster.spec --clean
+& $pythonExe -m PyInstaller desktop_caster.spec --clean
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -157,10 +219,10 @@ if ($LASTEXITCODE -eq 0) {
         Write-Host "Generating SSL certificates..." -ForegroundColor Yellow
 
         # Check if cryptography is installed
-        python -c "import cryptography" 2>$null
+        & $pythonExe -c "import cryptography" 2>$null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Installing cryptography package..." -ForegroundColor Gray
-            pip install cryptography
+            & $pythonExe -m pip install cryptography
         }
 
         # Generate certificates using embedded Python script
@@ -238,7 +300,7 @@ print(f'SUCCESS|{local_ip}')
 
         $tempScript = "temp_ssl_setup.py"
         $pythonScript | Out-File -Encoding UTF8 $tempScript
-        $result = python $tempScript 2>&1
+        $result = & $pythonExe $tempScript 2>&1
         Remove-Item $tempScript -ErrorAction SilentlyContinue
 
         if ($result -match 'SUCCESS\|(.+)') {
