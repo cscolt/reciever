@@ -303,7 +303,10 @@ print(f'SUCCESS|{local_ip}')
         $result = & $pythonExe $tempScript 2>&1
         Remove-Item $tempScript -ErrorAction SilentlyContinue
 
-        if ($result -match 'SUCCESS\|(.+)') {
+        # Find the SUCCESS line in the output
+        $successLine = $result | Where-Object { $_ -match 'SUCCESS\|(.+)' } | Select-Object -First 1
+
+        if ($successLine -and $successLine -match 'SUCCESS\|(.+)') {
             $localIP = $Matches[1]
             Write-Host ""
             Write-Host "SSL certificates created successfully!" -ForegroundColor Green
