@@ -308,8 +308,8 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True):
                 else:
                     logger.warning("UxPlay failed to start, will try Python AirPlay fallback")
             else:
-                logger.info("UxPlay not installed - will use Python AirPlay infrastructure")
-                logger.info("  For best iOS experience, install UxPlay: https://github.com/FDH2/UxPlay")
+                logger.info("UxPlay not installed - using built-in Python AirPlay receiver")
+                logger.info("  Python AirPlay has full crypto support (SRP-6a, Ed25519, ChaCha20, H.264)")
         except ImportError:
             logger.info("UxPlay integration module not found - using Python AirPlay infrastructure")
         except Exception as e:
@@ -321,9 +321,12 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True):
                 from airplay_receiver import AirPlayReceiver
                 airplay_receiver = AirPlayReceiver(stream_manager, name="Desktop Casting Receiver", port=7000)
                 airplay_receiver.start()
-                logger.info("Python AirPlay receiver started - iOS devices can discover this receiver")
-                logger.info("  Note: Cryptographic pairing not fully implemented - use camera streaming fallback")
-                logger.info("  Camera fallback: Connect via browser at http://<this-computer-ip>:8080")
+                logger.info("✓ Pure Python AirPlay receiver started with full crypto support!")
+                logger.info("  - Real SRP-6a authentication")
+                logger.info("  - Real Ed25519 key exchange")
+                logger.info("  - Real ChaCha20-Poly1305 encryption")
+                logger.info("  - H.264 video decoding")
+                logger.info("iOS devices can discover 'Desktop Casting Receiver' in Control Center > Screen Mirroring")
             except ImportError as e:
                 logger.warning(f"AirPlay support not available (missing dependency: {e})")
                 logger.warning("Install 'zeroconf' package for AirPlay support: pip install zeroconf")
