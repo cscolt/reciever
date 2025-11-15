@@ -77,12 +77,16 @@ python viewer.py
    - Falls back to getUserMedia() camera streaming on iOS and devices without screen capture support
    - Mobile-responsive design with touch-friendly controls
 
-4. **airplay_receiver.py**: Python AirPlay receiver (fallback implementation)
+4. **airplay_receiver.py**: Complete pure Python AirPlay receiver implementation
    - Advertises as AirPlay target using mDNS/Bonjour (zeroconf library)
    - Accepts AirPlay connections from iOS devices (iPhone, iPad)
+   - Implements real SRP-6a authentication using srp library
+   - Implements real Ed25519 key exchange using cryptography library
+   - Implements real ChaCha20-Poly1305 encryption/decryption
+   - Implements H.264 video decoding using PyAV (av library)
    - Runs on port 7000 by default
-   - **Limitation**: Cryptographic authentication incomplete
-   - Used as fallback when UxPlay is not available
+   - No external binaries required - all dependencies installable via pip
+   - Used alongside or as fallback when UxPlay is not available
 
 5. **uxplay_integration.py**: UxPlay subprocess wrapper (recommended for iOS)
    - Wraps UxPlay (C/C++ AirPlay server) as Python subprocess
@@ -163,9 +167,11 @@ Main runtime dependencies (see requirements.txt):
 - **opencv-python** (4.8.1.78): Video frame processing
 - **Pillow** (10.1.0): Image handling and conversion for tkinter
 - **numpy** (1.24.3): Array operations for video frames
-- **av** (11.0.0): Python bindings for FFmpeg (used by aiortc)
+- **av** (11.0.0): Python bindings for FFmpeg (used by aiortc and H.264 decoding)
 - **websockets** (12.0): WebSocket support
 - **zeroconf** (0.132.2): mDNS/Bonjour service discovery for AirPlay
+- **srp** (1.0.20): SRP-6a authentication protocol for AirPlay
+- **cryptography** (41.0.7): Ed25519, ChaCha20-Poly1305, and HKDF for AirPlay encryption
 
 Build dependency:
 - **pyinstaller** (6.3.0): Creates standalone executables
@@ -210,10 +216,12 @@ The application now supports iOS and Android devices through intelligent device 
 4. Send `capture_mode` parameter to server for tracking
 
 ### AirPlay Support for iOS
-The application now includes native AirPlay receiver functionality for true iOS screen mirroring:
+The application includes a complete pure Python AirPlay receiver implementation with real cryptography for true iOS screen mirroring:
 
 **Architecture** (airplay_receiver.py):
 - `AirPlayReceiver` class manages the entire AirPlay stack
+- `AirPlayCrypto` class handles all cryptographic operations (lines 95-368)
+- `H264Decoder` class decodes video frames using PyAV (lines 371-425)
 - Uses `zeroconf` library for mDNS/Bonjour service advertisement
 - Advertises as `_airplay._tcp.local.` service type
 - Pretends to be an Apple TV for maximum iOS compatibility
@@ -222,31 +230,50 @@ The application now includes native AirPlay receiver functionality for true iOS 
 **Service Discovery**:
 - Advertises with feature flags: `0x5A7FFFF7,0x1E` (screen mirroring supported)
 - Includes device ID, model (AppleTV3,2), and version information
+- Real Ed25519 public key for pairing
 - iOS devices discover it automatically in Screen Mirroring menu
 
-**Connection Handling** (airplay_receiver.py:132-232):
+**Cryptographic Implementation**:
+1. **SRP-6a Authentication** (airplay_receiver.py:714-767):
+   - Uses `srp` library for password-authenticated key exchange
+   - Handles M1->M2 and M3->M4 handshake states
+   - Establishes initial trust between devices
+
+2. **Ed25519 Key Exchange** (airplay_receiver.py:769-830):
+   - Uses `cryptography` library for Curve25519 ECDH
+   - Exchanges public keys and computes shared secret
+   - Signs data to verify authenticity
+
+3. **ChaCha20-Poly1305 Encryption** (airplay_receiver.py:269-348):
+   - Encrypts/decrypts video stream data
+   - Uses AEAD for authenticated encryption
+   - Derives keys using HKDF-SHA512
+
+4. **H.264 Video Decoding** (airplay_receiver.py:387-417):
+   - Uses PyAV (`av` library) to decode video frames
+   - Converts H.264 NAL units to numpy arrays
+   - Real-time frame processing for display
+
+**Connection Handling**:
 - Accepts HTTP-style requests on port 7000
-- Handles `/stream` endpoint for video data
+- Handles `/info`, `/server-info`, `/pair-setup`, `/pair-verify` endpoints
+- Handles `/stream` endpoint for encrypted video data
 - Handles `/reverse` endpoint for event communication
-- Creates placeholder frames with device info
-- Full H.264 decoding would be needed for production use
+- Decrypts and decodes H.264 frames in real-time
 
 **Integration**:
 - Started automatically in `server.py:run_server()` when `enable_airplay=True`
-- Gracefully degrades if `zeroconf` not installed
+- Checks for all dependencies and provides graceful fallbacks
 - Shares the same `StreamManager` instance as WebRTC streams
 - AirPlay streams appear with "AirPlay: [device name]" prefix in GUI
 
-**Current Limitations**:
-- **Cryptographic authentication incomplete**: AirPlay requires real SRP-6a and Ed25519 protocols
-- iOS can discover the receiver but won't complete pairing handshake
-- Random dummy data fails iOS's cryptographic validation
-- Full implementation would require:
-  - Real SRP-6a protocol implementation (~1000 lines)
-  - Real Ed25519 key exchange (~500 lines)
-  - ChaCha20-Poly1305 encryption for video stream
-  - H.264 video decoder
-- Infrastructure is complete and ready for proper crypto implementation
+**Implementation Status**:
+- ✅ Real SRP-6a authentication (using `srp` library)
+- ✅ Real Ed25519 key exchange (using `cryptography` library)
+- ✅ Real ChaCha20-Poly1305 encryption/decryption
+- ✅ Real H.264 video decoder (using `av`/PyAV library)
+- ✅ Complete pure Python implementation (no external binaries required)
+- ✅ All dependencies installable via pip
 - **SOLVED**: Use UxPlay integration instead (see below)
 
 ### UxPlay Integration for iOS Screen Mirroring

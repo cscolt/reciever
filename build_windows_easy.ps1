@@ -39,9 +39,9 @@ Write-Host ""
 
 # Install packages that don't require compilation first
 Write-Host "Installing basic packages..." -ForegroundColor Gray
-pip install --only-binary :all: aiohttp Pillow websockets pyinstaller zeroconf
+pip install --only-binary :all: aiohttp Pillow websockets pyinstaller zeroconf srp cryptography
 if ($LASTEXITCODE -ne 0) {
-    pip install aiohttp Pillow websockets pyinstaller zeroconf
+    pip install aiohttp Pillow websockets pyinstaller zeroconf srp cryptography
 }
 
 Write-Host ""
