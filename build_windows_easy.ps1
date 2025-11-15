@@ -6,10 +6,57 @@ Write-Host "Desktop Casting Receiver - Easy Builder" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check Python version
-Write-Host "Checking Python installation..." -ForegroundColor Yellow
-$pythonVersion = & python --version 2>&1
+# Find Windows Python installation
+Write-Host "Locating Windows Python..." -ForegroundColor Yellow
+
+$pythonPaths = @(
+    "C:\Users\control\AppData\Local\Programs\Python\Python312\python.exe",
+    "C:\Users\control\AppData\Local\Programs\Python\Python311\python.exe",
+    "C:\Python312\python.exe",
+    "C:\Python311\python.exe"
+)
+
+$pythonExe = $null
+foreach ($path in $pythonPaths) {
+    if (Test-Path $path) {
+        $pythonExe = $path
+        break
+    }
+}
+
+# Also try py launcher as fallback
+if (-not $pythonExe) {
+    try {
+        $pyCheck = & py -3.12 --version 2>&1
+        if ($?) {
+            $pythonExe = "py -3.12"
+        }
+    } catch {}
+}
+
+# Last resort: use python in PATH (but verify it's not WSL)
+if (-not $pythonExe) {
+    try {
+        $pythonCheck = & python --version 2>&1
+        if ($pythonCheck -notmatch "usr/bin" -and $?) {
+            $pythonExe = "python"
+        }
+    } catch {}
+}
+
+if (-not $pythonExe) {
+    Write-Host "ERROR: Could not find Windows Python installation!" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please install Python 3.11 or 3.12 from:" -ForegroundColor Yellow
+    Write-Host "  https://www.python.org/downloads/" -ForegroundColor White
+    Write-Host ""
+    pause
+    exit 1
+}
+
+$pythonVersion = & $pythonExe --version 2>&1
 Write-Host "Found: $pythonVersion" -ForegroundColor Green
+Write-Host "Path: $pythonExe" -ForegroundColor Gray
 Write-Host ""
 
 # Create/activate virtual environment
@@ -21,15 +68,20 @@ if (Test-Path "venv_build") {
 }
 
 Write-Host "Creating new virtual environment..." -ForegroundColor Gray
-python -m venv venv_build
+& $pythonExe -m venv venv_build
+
+if (-not (Test-Path ".\venv_build\Scripts\python.exe")) {
+    Write-Host "ERROR: Failed to create virtual environment!" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "Activating virtual environment..." -ForegroundColor Gray
-& .\venv_build\Scripts\Activate.ps1
+$pythonExe = ".\venv_build\Scripts\python.exe"
 
 # Upgrade pip
 Write-Host ""
 Write-Host "Upgrading pip..." -ForegroundColor Yellow
-python -m pip install --upgrade pip
+& $pythonExe -m pip install --upgrade pip
 
 # Install dependencies without compilation
 Write-Host ""
@@ -39,16 +91,16 @@ Write-Host ""
 
 # Install packages that don't require compilation first
 Write-Host "Installing basic packages..." -ForegroundColor Gray
-pip install --only-binary :all: aiohttp Pillow websockets pyinstaller zeroconf srp cryptography
+& $pythonExe -m pip install --only-binary :all: aiohttp Pillow websockets pyinstaller zeroconf srp cryptography
 if ($LASTEXITCODE -ne 0) {
-    pip install aiohttp Pillow websockets pyinstaller zeroconf srp cryptography
+    & $pythonExe -m pip install aiohttp Pillow websockets pyinstaller zeroconf srp cryptography
 }
 
 Write-Host ""
 Write-Host "Installing numpy and opencv..." -ForegroundColor Gray
-pip install --only-binary :all: numpy opencv-python
+& $pythonExe -m pip install --only-binary :all: numpy opencv-python
 if ($LASTEXITCODE -ne 0) {
-    pip install numpy opencv-python
+    & $pythonExe -m pip install numpy opencv-python
 }
 
 # Try to install av with pre-built wheel
@@ -59,14 +111,14 @@ Write-Host "Attempting to use pre-built wheel..." -ForegroundColor Gray
 $avInstalled = $false
 
 # Try installing av with --only-binary flag
-pip install --only-binary av av 2>$null
+& $pythonExe -m pip install --only-binary av av 2>$null
 if ($LASTEXITCODE -eq 0) {
     $avInstalled = $true
     Write-Host "  av installed successfully!" -ForegroundColor Green
 } else {
     # Try without the flag (pip might find a wheel)
     Write-Host "  Trying alternative method..." -ForegroundColor Gray
-    pip install av 2>$null
+    & $pythonExe -m pip install av 2>$null
     if ($LASTEXITCODE -eq 0) {
         $avInstalled = $true
         Write-Host "  av installed successfully!" -ForegroundColor Green
@@ -104,7 +156,7 @@ if (-not $avInstalled) {
 # Install aiortc
 Write-Host ""
 Write-Host "Installing aiortc (WebRTC library)..." -ForegroundColor Gray
-pip install aiortc
+& $pythonExe -m pip install aiortc
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "ERROR: Failed to install aiortc!" -ForegroundColor Red
@@ -131,7 +183,7 @@ Write-Host "Building executable with PyInstaller..." -ForegroundColor Yellow
 Write-Host "This may take several minutes..." -ForegroundColor Gray
 Write-Host ""
 
-pyinstaller desktop_caster.spec --clean
+& $pythonExe -m PyInstaller desktop_caster.spec --clean
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -179,10 +231,10 @@ if ($LASTEXITCODE -eq 0) {
         Write-Host "Generating SSL certificates..." -ForegroundColor Yellow
 
         # Check if cryptography is installed
-        python -c "import cryptography" 2>$null
+        & $pythonExe -c "import cryptography" 2>$null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Installing cryptography package..." -ForegroundColor Gray
-            pip install cryptography
+            & $pythonExe -m pip install cryptography
         }
 
         # Generate certificates using embedded Python script
@@ -260,7 +312,7 @@ print(f'SUCCESS|{local_ip}')
 
         $tempScript = "temp_ssl_setup.py"
         $pythonScript | Out-File -Encoding UTF8 $tempScript
-        $result = python $tempScript 2>&1
+        $result = & $pythonExe $tempScript 2>&1
         Remove-Item $tempScript -ErrorAction SilentlyContinue
 
         if ($result -match 'SUCCESS\|(.+)') {
