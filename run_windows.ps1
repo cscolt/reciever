@@ -26,10 +26,11 @@ if ($isWSL) {
 # Find Python installation
 Write-Host "Locating Python installation..." -ForegroundColor Yellow
 
+# Prefer Python 3.12 over 3.14 due to better package compatibility
 $pythonPaths = @(
     ".\venv_py312\Scripts\python.exe",
-    ".\venv\Scripts\python.exe",
     "C:\Users\control\AppData\Local\Programs\Python\Python312\python.exe",
+    ".\venv\Scripts\python.exe",
     "C:\Users\control\AppData\Local\Programs\Python\Python314\python.exe",
     "python.exe"
 )
@@ -103,9 +104,31 @@ if ($missingDeps.Count -gt 0) {
     Write-Host "  Missing dependencies: $($missingDeps -join ', ')" -ForegroundColor Red
     Write-Host ""
     Write-Host "Installing dependencies..." -ForegroundColor Yellow
-    & $pythonExe -m pip install -r requirements.txt
+
+    # Check Python version
+    $pyVersion = & $pythonExe --version 2>&1
+    if ($pyVersion -match "3\.14") {
+        Write-Host "  Python 3.14 detected - upgrading setuptools first..." -ForegroundColor Yellow
+        & $pythonExe -m pip install --upgrade pip setuptools>=70.0.0 wheel
+    }
+
+    # Try flexible requirements first (better compatibility)
+    if (Test-Path "requirements-flexible.txt") {
+        & $pythonExe -m pip install -r requirements-flexible.txt
+    } else {
+        & $pythonExe -m pip install -r requirements.txt
+    }
+
     if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
         Write-Host "Failed to install dependencies!" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "If using Python 3.14, try Python 3.12 instead:" -ForegroundColor Yellow
+        Write-Host "  1. Install Python 3.12 from python.org" -ForegroundColor White
+        Write-Host "  2. Run: C:\Path\To\Python312\python.exe -m venv venv_py312" -ForegroundColor White
+        Write-Host "  3. Run: .\venv_py312\Scripts\Activate.ps1" -ForegroundColor White
+        Write-Host "  4. Run: pip install -r requirements-flexible.txt" -ForegroundColor White
+        Write-Host ""
         exit 1
     }
     Write-Host "  Dependencies installed successfully!" -ForegroundColor Green
