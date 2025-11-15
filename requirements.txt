@@ -7,5 +7,6 @@ pyinstaller==6.3.0
 av==11.0.0
 websockets==12.0
 zeroconf==0.132.2
+ifaddr>=0.1.7
 srp==1.0.20
 cryptography==41.0.7

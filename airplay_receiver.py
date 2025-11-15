@@ -21,11 +21,19 @@ import plistlib
 import os
 import hashlib
 import hmac
-from zeroconf import ServiceInfo, Zeroconf
 import numpy as np
 import cv2
 from typing import Optional, Dict, Tuple
 import logging
+
+# Zeroconf import (required for mDNS/Bonjour service discovery)
+try:
+    from zeroconf import ServiceInfo, Zeroconf
+    ZEROCONF_AVAILABLE = True
+except ImportError:
+    ZEROCONF_AVAILABLE = False
+    ServiceInfo = None
+    Zeroconf = None
 
 # Cryptography imports
 try:
@@ -462,6 +470,8 @@ class AirPlayReceiver:
         """Check if all required dependencies are available"""
         missing = []
 
+        if not ZEROCONF_AVAILABLE:
+            missing.append("zeroconf (for mDNS/Bonjour service discovery)")
         if not srp:
             missing.append("srp (for SRP-6a authentication)")
         if not CRYPTO_AVAILABLE:
@@ -470,10 +480,13 @@ class AirPlayReceiver:
             missing.append("av (for H.264 video decoding)")
 
         if missing:
-            logger.warning(f"Missing optional dependencies: {', '.join(missing)}")
-            logger.warning("Install with: pip install srp cryptography av")
+            logger.error(f"CRITICAL - Missing required dependencies: {', '.join(missing)}")
+            logger.error("AirPlay service WILL NOT WORK without these!")
+            logger.error("Install with: pip install zeroconf srp cryptography av")
+            if not ZEROCONF_AVAILABLE:
+                logger.error(">>> zeroconf is CRITICAL - without it, iOS devices cannot discover this receiver!")
         else:
-            logger.info("✓ All crypto dependencies available")
+            logger.info("✓ All AirPlay dependencies available")
 
     def start(self):
         """Start the AirPlay receiver service"""
@@ -510,6 +523,11 @@ class AirPlayReceiver:
 
     def _advertise_service(self):
         """Advertise AirPlay service via mDNS (Bonjour)"""
+        if not ZEROCONF_AVAILABLE:
+            logger.error("Cannot advertise AirPlay service - zeroconf library not available!")
+            logger.error("iOS devices will NOT be able to discover this receiver")
+            return
+
         try:
             # Get local IP address
             hostname = socket.gethostname()
