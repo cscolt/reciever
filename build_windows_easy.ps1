@@ -177,7 +177,7 @@ if ($LASTEXITCODE -eq 0) {
             Write-Host ""
         }
     } else {
-        Write-Host "✓ UxPlay is already installed - iOS screen mirroring enabled!" -ForegroundColor Green
+        Write-Host "[OK] UxPlay is already installed - iOS screen mirroring enabled!" -ForegroundColor Green
         Write-Host ""
     }
 
