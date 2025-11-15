@@ -39,43 +39,21 @@ if [ $? -eq 0 ]; then
     echo "  cd dist/DesktopCastingReceiver"
     echo "  ./DesktopCastingReceiver"
     echo ""
-
-    # Check if UxPlay is installed
-    if ! command -v uxplay &> /dev/null; then
-        echo ""
-        echo "=================================="
-        echo "Optional: iOS Screen Mirroring"
-        echo "=================================="
-        echo ""
-        echo "For iOS screen mirroring support, UxPlay needs to be installed."
-        echo ""
-        echo "UxPlay enables:"
-        echo "  - True iOS screen mirroring via AirPlay"
-        echo "  - Native protocol support (no browser needed)"
-        echo "  - Better quality than camera fallback"
-        echo ""
-        echo "Without UxPlay:"
-        echo "  - iOS devices can still use camera streaming via browser"
-        echo "  - Connect at http://<your-ip>:8080"
-        echo ""
-        read -p "Would you like to install UxPlay now? (y/N) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo ""
-            echo "Running UxPlay installation script..."
-            chmod +x install_uxplay.sh
-            ./install_uxplay.sh
-        else
-            echo ""
-            echo "You can install UxPlay later by running:"
-            echo "  ./install_uxplay.sh"
-            echo ""
-        fi
-    else
-        echo ""
-        echo "✓ UxPlay is already installed - iOS screen mirroring enabled!"
-        echo ""
-    fi
+    echo "=================================="
+    echo "iOS Screen Mirroring Support"
+    echo "=================================="
+    echo ""
+    echo "✓ Built-in Python AirPlay receiver included!"
+    echo ""
+    echo "Features:"
+    echo "  - Native AirPlay protocol support"
+    echo "  - Real cryptography (SRP-6a, Ed25519, ChaCha20)"
+    echo "  - H.264 video decoding"
+    echo "  - No external dependencies required"
+    echo ""
+    echo "iOS devices will automatically discover this receiver"
+    echo "in Control Center > Screen Mirroring"
+    echo ""
 else
     echo ""
     echo "=================================="

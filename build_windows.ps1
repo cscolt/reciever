@@ -121,6 +121,24 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  .\dist\DesktopCastingReceiver\DesktopCastingReceiver.exe" -ForegroundColor White
     Write-Host ""
 
+    # iOS Screen Mirroring Information
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "iOS Screen Mirroring Support" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "[OK] Built-in Python AirPlay receiver included!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Features:" -ForegroundColor Cyan
+    Write-Host "  - Native AirPlay protocol support" -ForegroundColor White
+    Write-Host "  - Real cryptography (SRP-6a, Ed25519, ChaCha20)" -ForegroundColor White
+    Write-Host "  - H.264 video decoding" -ForegroundColor White
+    Write-Host "  - No external dependencies required" -ForegroundColor White
+    Write-Host ""
+    Write-Host "iOS devices will automatically discover this receiver" -ForegroundColor Yellow
+    Write-Host "in Control Center > Screen Mirroring" -ForegroundColor Yellow
+    Write-Host ""
+
     # Offer to set up SSL certificates
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan

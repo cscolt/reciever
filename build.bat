@@ -39,42 +39,21 @@ if %ERRORLEVEL% EQU 0 (
     echo   cd dist\DesktopCastingReceiver
     echo   DesktopCastingReceiver.exe
     echo.
-
-    REM Check if UxPlay is installed
-    where uxplay >nul 2>&1
-    if %ERRORLEVEL% NEQ 0 (
-        echo.
-        echo ==================================
-        echo Optional: iOS Screen Mirroring
-        echo ==================================
-        echo.
-        echo For iOS screen mirroring support, UxPlay needs to be installed.
-        echo.
-        echo UxPlay enables:
-        echo   - True iOS screen mirroring via AirPlay
-        echo   - Native protocol support (no browser needed)
-        echo   - Better quality than camera fallback
-        echo.
-        echo Without UxPlay:
-        echo   - iOS devices can still use camera streaming via browser
-        echo   - Connect at http://^<your-ip^>:8080
-        echo.
-        set /p INSTALL_UXPLAY="Would you like to install UxPlay now? (y/N): "
-        if /i "%INSTALL_UXPLAY%"=="y" (
-            echo.
-            echo Running UxPlay installation script...
-            powershell -ExecutionPolicy Bypass -File ".\install_uxplay.ps1"
-        ) else (
-            echo.
-            echo You can install UxPlay later by running:
-            echo   powershell -ExecutionPolicy Bypass -File .\install_uxplay.ps1
-            echo.
-        )
-    ) else (
-        echo.
-        echo UxPlay is already installed - iOS screen mirroring enabled!
-        echo.
-    )
+    echo ==================================
+    echo iOS Screen Mirroring Support
+    echo ==================================
+    echo.
+    echo [OK] Built-in Python AirPlay receiver included!
+    echo.
+    echo Features:
+    echo   - Native AirPlay protocol support
+    echo   - Real cryptography (SRP-6a, Ed25519, ChaCha20)
+    echo   - H.264 video decoding
+    echo   - No external dependencies required
+    echo.
+    echo iOS devices will automatically discover this receiver
+    echo in Control Center ^> Screen Mirroring
+    echo.
 ) else (
     echo.
     echo ==================================

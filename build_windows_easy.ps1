@@ -143,43 +143,23 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  .\dist\DesktopCastingReceiver\DesktopCastingReceiver.exe" -ForegroundColor White
     Write-Host ""
 
-    # Check if UxPlay is installed and offer installation
+    # iOS Screen Mirroring Information
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "Optional: iOS Screen Mirroring via UxPlay" -ForegroundColor Cyan
-    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "iOS Screen Mirroring Support" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
-
-    $uxplayExists = Get-Command uxplay -ErrorAction SilentlyContinue
-    if (-not $uxplayExists) {
-        Write-Host "UxPlay is not installed." -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "UxPlay enables:" -ForegroundColor White
-        Write-Host "  - True iOS screen mirroring via AirPlay" -ForegroundColor Gray
-        Write-Host "  - Native protocol support (no browser needed)" -ForegroundColor Gray
-        Write-Host "  - Better quality than camera fallback" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "Without UxPlay:" -ForegroundColor White
-        Write-Host "  - iOS devices can still use camera streaming via browser" -ForegroundColor Gray
-        Write-Host ""
-
-        $installUxPlay = Read-Host "Would you like to install UxPlay now? (y/N)"
-        if ($installUxPlay -eq "y" -or $installUxPlay -eq "Y") {
-            Write-Host ""
-            Write-Host "Launching UxPlay installation script..." -ForegroundColor Green
-            Write-Host "Note: This will open in a new window" -ForegroundColor Gray
-            Write-Host ""
-            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `".\install_uxplay.ps1`"" -NoNewWindow -Wait
-        } else {
-            Write-Host ""
-            Write-Host "You can install UxPlay later by running:" -ForegroundColor Yellow
-            Write-Host "  .\install_uxplay.ps1" -ForegroundColor White
-            Write-Host ""
-        }
-    } else {
-        Write-Host "[OK] UxPlay is already installed - iOS screen mirroring enabled!" -ForegroundColor Green
-        Write-Host ""
-    }
+    Write-Host "[OK] Built-in Python AirPlay receiver included!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Features:" -ForegroundColor Cyan
+    Write-Host "  - Native AirPlay protocol support" -ForegroundColor White
+    Write-Host "  - Real cryptography (SRP-6a, Ed25519, ChaCha20)" -ForegroundColor White
+    Write-Host "  - H.264 video decoding" -ForegroundColor White
+    Write-Host "  - No external dependencies required" -ForegroundColor White
+    Write-Host ""
+    Write-Host "iOS devices will automatically discover this receiver" -ForegroundColor Yellow
+    Write-Host "in Control Center > Screen Mirroring" -ForegroundColor Yellow
+    Write-Host ""
 
     # Offer to set up SSL certificates
     Write-Host ""
