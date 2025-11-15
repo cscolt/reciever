@@ -152,7 +152,7 @@
 <body>
     <div class="container">
         <h1 id="appTitle">🖥️ Desktop Casting</h1>
-        <p class="subtitle" id="appSubtitle">Share your screen with the monitoring station</p>
+        <p class="subtitle" id="appSubtitle">Share your entire screen, window, or Chrome tab</p>
 
         <div id="status" class="status hidden"></div>
 
@@ -166,7 +166,7 @@
         </div>
 
         <button id="startBtn" class="btn-primary" onclick="startCasting()">
-            Start Sharing Screen
+            Start Sharing
         </button>
 
         <button id="stopBtn" class="btn-danger hidden" onclick="stopCasting()">
@@ -225,18 +225,60 @@
                 // Try screen capture first (works on Android Chrome and desktop browsers)
                 if (!isIOS && navigator.mediaDevices.getDisplayMedia) {
                     try {
-                        showStatus('Requesting screen access...', 'info');
+                        showStatus('Select: Entire Screen, Window, or Chrome Tab...', 'info');
 
-                        localStream = await navigator.mediaDevices.getDisplayMedia({
+                        // Chrome/Chromebook supports three capture modes:
+                        // 1. Entire screen
+                        // 2. Application window
+                        // 3. Chrome tab (great for presentations!)
+                        const displayMediaOptions = {
                             video: {
                                 cursor: "always",
-                                displaySurface: isMobile ? "browser" : "monitor"
+                                displaySurface: "monitor", // Allows screen, window, or tab selection
                             },
-                            audio: false
-                        });
+                            audio: {
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                sampleRate: 44100
+                            },
+                            // preferCurrentTab: true  // Chrome 94+ can default to current tab
+                        };
+
+                        // For Chrome 94+, suggest current tab as an option
+                        if (isMobile) {
+                            displayMediaOptions.preferCurrentTab = false;
+                            displayMediaOptions.video.displaySurface = "browser"; // Prefer tab on mobile
+                        }
+
+                        localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+
+                        // Detect what type of surface was selected
+                        const videoTrack = localStream.getVideoTracks()[0];
+                        const settings = videoTrack.getSettings();
+                        const displaySurface = settings.displaySurface || 'unknown';
+                        const hasAudio = localStream.getAudioTracks().length > 0;
 
                         captureMode = 'screen';
-                        document.getElementById('captureModeText').textContent = 'Screen Sharing';
+
+                        // Update UI based on what was actually shared
+                        let shareTypeText = '';
+                        if (displaySurface === 'browser') {
+                            shareTypeText = 'Chrome Tab';
+                        } else if (displaySurface === 'window') {
+                            shareTypeText = 'Window';
+                        } else if (displaySurface === 'monitor') {
+                            shareTypeText = 'Screen';
+                        } else {
+                            shareTypeText = 'Screen/Tab';
+                        }
+
+                        // Add audio indicator if tab audio is being captured
+                        if (hasAudio) {
+                            document.getElementById('captureModeText').textContent = `${shareTypeText} + Audio`;
+                        } else {
+                            document.getElementById('captureModeText').textContent = `${shareTypeText}`;
+                        }
+
                         streamAcquired = true;
                     } catch (screenError) {
                         console.log('Screen capture not available or denied, trying camera fallback...', screenError);
@@ -313,16 +355,17 @@
                 const answer = await response.json();
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
 
-                const modeText = captureMode === 'camera' ? 'camera streaming' : 'screen sharing';
-                showStatus(`✓ Connected! ${modeText.charAt(0).toUpperCase() + modeText.slice(1)} as "${clientName}"`, 'success');
+                // Show connection success with appropriate message
+                const captureModeText = document.getElementById('captureModeText').textContent;
+                const modeText = captureMode === 'camera' ? 'Camera Streaming' : captureModeText;
+                showStatus(`✓ Connected! ${modeText} as "${clientName}"`, 'success');
 
                 // Update UI
                 document.getElementById('startBtn').classList.add('hidden');
                 document.getElementById('stopBtn').classList.remove('hidden');
                 document.getElementById('clientName').disabled = true;
-                if (captureMode === 'screen') {
-                    document.getElementById('captureMode').classList.add('hidden');
-                }
+                // Always show capture mode so user knows what they're sharing
+                document.getElementById('captureMode').classList.remove('hidden');
 
                 // Handle stream end
                 localStream.getVideoTracks()[0].addEventListener('ended', () => {
