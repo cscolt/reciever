@@ -11,6 +11,7 @@ a = Analysis(
         ('server.py', '.'),
         ('airplay_receiver.py', '.'),
         ('uxplay_integration.py', '.'),
+        ('mdns_discovery.py', '.'),
     ],
     hiddenimports=[
         'aiortc',

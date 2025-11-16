@@ -26,20 +26,32 @@ import cv2
 from typing import Optional, Dict, Tuple
 import logging
 
+# Enhanced logging - set to DEBUG for troubleshooting
+LOG_LEVEL = os.getenv('DEBUG', 'INFO')
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Zeroconf import (required for mDNS/Bonjour service discovery)
 try:
     from zeroconf import ServiceInfo, Zeroconf
     ZEROCONF_AVAILABLE = True
-except ImportError:
+    logger.debug("Zeroconf module loaded successfully")
+except ImportError as e:
     ZEROCONF_AVAILABLE = False
     ServiceInfo = None
     Zeroconf = None
+    logger.warning(f"Zeroconf not available: {e}")
 
 # Cryptography imports
 try:
     import srp
-except ImportError:
+    logger.debug("SRP module loaded successfully")
+except ImportError as e:
     srp = None
+    logger.warning(f"SRP not available: {e}")
 
 try:
     from cryptography.hazmat.primitives import hashes, serialization
@@ -48,18 +60,19 @@ try:
     from cryptography.hazmat.primitives.kdf.hkdf import HKDF
     from cryptography.hazmat.backends import default_backend
     CRYPTO_AVAILABLE = True
-except ImportError:
+    logger.debug("Cryptography module loaded successfully")
+except ImportError as e:
     CRYPTO_AVAILABLE = False
+    logger.warning(f"Cryptography not available: {e}")
 
 # Video decoding import
 try:
     import av
     VIDEO_AVAILABLE = True
-except ImportError:
+    logger.debug("PyAV module loaded successfully")
+except ImportError as e:
     VIDEO_AVAILABLE = False
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    logger.warning(f"PyAV not available: {e}")
 
 
 def tlv8_encode(type_id, data):

@@ -97,19 +97,38 @@ if %ERRORLEVEL% EQU 0 (
     echo   DesktopCastingReceiver.exe
     echo.
     echo ==================================
+    echo NEW: Chrome/Chromebook Discovery
+    echo ==================================
+    echo.
+    echo [OK] mDNS service advertisement included!
+    echo.
+    echo Chrome and Chromebook devices can now:
+    echo   - Automatically discover this receiver
+    echo   - Find it in Chrome Cast menu
+    echo   - Or manually visit: http://^<your-ip^>:8080
+    echo.
+    echo ==================================
     echo iOS Screen Mirroring Support
     echo ==================================
     echo.
-    echo [OK] Built-in Python AirPlay receiver included!
+    echo Two methods available:
     echo.
-    echo Features:
-    echo   - Native AirPlay protocol support
-    echo   - Real cryptography (SRP-6a, Ed25519, ChaCha20)
-    echo   - H.264 video decoding
-    echo   - No external dependencies required
+    echo 1. UxPlay (RECOMMENDED - Real video capture)
+    echo    Note: UxPlay installation on Windows is complex
+    echo    See: https://github.com/FDH2/UxPlay
+    echo    Requires: GStreamer, Bonjour, and compilation
     echo.
-    echo iOS devices will automatically discover this receiver
+    echo 2. Python AirPlay (Built-in fallback)
+    echo    [OK] Included with full crypto support
+    echo    - SRP-6a authentication
+    echo    - Ed25519 key exchange
+    echo    - ChaCha20-Poly1305 encryption
+    echo    - H.264 video decoding
+    echo.
+    echo iOS devices will discover 'Desktop Casting Receiver'
     echo in Control Center ^> Screen Mirroring
+    echo.
+    echo Note: For BEST iOS experience, use Linux with UxPlay + GStreamer
     echo.
 ) else (
     echo.

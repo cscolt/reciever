@@ -18,12 +18,19 @@ import ssl
 import os
 import sys
 
-logging.basicConfig(level=logging.INFO)
+# Enhanced logging with DEBUG level
+# Set to DEBUG for detailed troubleshooting, INFO for normal operation
+LOG_LEVEL = os.getenv('DEBUG', 'INFO')
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Global AirPlay receiver instances (will be initialized in run_server)
+# Global instances (will be initialized in run_server)
 airplay_receiver = None
 uxplay_integration = None
+mdns_advertiser = None
 
 # Helper function to get base path (works in both dev and PyInstaller)
 def get_base_path():
@@ -257,9 +264,9 @@ def create_app():
     return app
 
 
-def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True):
-    """Run the server with optional AirPlay support"""
-    global airplay_receiver
+def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True, enable_mdns=True):
+    """Run the server with optional AirPlay support and mDNS discovery"""
+    global airplay_receiver, mdns_advertiser
 
     app = create_app()
 
@@ -286,6 +293,21 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True):
     else:
         logger.info(f"Starting server on http://{host}:{port}")
         logger.info(f"Devices should visit http://<this-computer-ip>:{port}")
+
+    # Start mDNS discovery for Chrome/Chromebook casting
+    if enable_mdns:
+        try:
+            from mdns_discovery import MDNSAdvertiser
+            mdns_advertiser = MDNSAdvertiser("Desktop Casting Receiver", port, protocol)
+            if mdns_advertiser.start():
+                logger.info("✓ mDNS discovery enabled - Chrome/Chromebook can discover this device")
+            else:
+                logger.warning("mDNS discovery failed - devices must use manual URL entry")
+        except ImportError:
+            logger.warning("mdns_discovery module not found - Chrome won't discover device automatically")
+        except Exception as e:
+            logger.error(f"Failed to start mDNS discovery: {e}")
+            logger.debug("Exception details:", exc_info=True)
 
     # Start AirPlay receiver if enabled
     # Try UxPlay first (provides actual iOS screen mirroring), fall back to Python implementation
@@ -337,13 +359,22 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True):
 
     web.run_app(app, host=host, port=port, ssl_context=ssl_context, handle_signals=False)
 
-    # Cleanup AirPlay on exit
+    # Cleanup on exit
+    logger.info("Shutting down services...")
+
+    if mdns_advertiser:
+        logger.info("Stopping mDNS discovery...")
+        mdns_advertiser.stop()
+
     if uxplay_integration:
         logger.info("Stopping UxPlay...")
         uxplay_integration.stop()
+
     if airplay_receiver:
         logger.info("Stopping Python AirPlay receiver...")
         airplay_receiver.stop()
+
+    logger.info("Shutdown complete")
 
 
 if __name__ == '__main__':
