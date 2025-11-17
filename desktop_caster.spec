@@ -1,18 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
+
+# Collect all zeroconf data, binaries, and metadata
+zeroconf_datas, zeroconf_binaries, zeroconf_hiddenimports = collect_all('zeroconf')
+ifaddr_datas, ifaddr_binaries, ifaddr_hiddenimports = collect_all('ifaddr')
 
 a = Analysis(
     ['viewer.py'],
     pathex=[],
-    binaries=[],
+    binaries=zeroconf_binaries + ifaddr_binaries,
     datas=[
         ('client.html', '.'),
         ('server.py', '.'),
         ('airplay_receiver.py', '.'),
         ('uxplay_integration.py', '.'),
         ('mdns_discovery.py', '.'),
-    ],
+    ] + zeroconf_datas + ifaddr_datas,
     hiddenimports=[
         'aiortc',
         'aiohttp',
@@ -21,7 +26,7 @@ a = Analysis(
         'numpy',
         'PIL',
         'websockets',
-        # Zeroconf and all submodules (CRITICAL for AirPlay mDNS discovery)
+        # Zeroconf - using collect_all but keeping these for completeness
         'zeroconf',
         'zeroconf._cache',
         'zeroconf._core',
@@ -69,7 +74,7 @@ a = Analysis(
         'cryptography.hazmat.backends.openssl',
         'hashlib',
         'hmac',
-    ],
+    ] + zeroconf_hiddenimports + ifaddr_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

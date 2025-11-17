@@ -81,6 +81,61 @@ if [ $? -eq 0 ]; then
     echo "iOS devices will discover 'Desktop Casting Receiver'"
     echo "in Control Center > Screen Mirroring"
     echo ""
+
+    # Prompt for SSL certificate generation
+    echo "=================================="
+    echo "Optional: SSL Certificate Setup"
+    echo "=================================="
+    echo ""
+    echo "SSL certificates enable HTTPS connections, which are required for:"
+    echo "  - Screen sharing on many browsers"
+    echo "  - Camera access on mobile devices"
+    echo "  - AirPlay screen mirroring from iOS devices"
+    echo ""
+    read -p "Would you like to generate SSL certificates now? (Y/n) " ssl_response
+    ssl_response=${ssl_response:-Y}
+
+    if [[ ! "$ssl_response" =~ ^[Nn]$ ]]; then
+        echo ""
+        echo "Generating SSL certificates..."
+
+        # Get local IP
+        LOCAL_IP=$(hostname -I | awk '{print $1}')
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP="127.0.0.1"
+        fi
+
+        # Generate certificates directly in dist folder
+        openssl req -x509 -newkey rsa:2048 -nodes \
+            -out ./dist/DesktopCastingReceiver/cert.pem \
+            -keyout ./dist/DesktopCastingReceiver/key.pem \
+            -days 365 \
+            -subj "/C=US/ST=State/L=City/O=Desktop Casting/CN=$LOCAL_IP" \
+            2>/dev/null
+
+        if [ -f "./dist/DesktopCastingReceiver/cert.pem" ] && [ -f "./dist/DesktopCastingReceiver/key.pem" ]; then
+            echo ""
+            echo "✓ SSL certificates created successfully!"
+            echo "  cert.pem and key.pem in ./dist/DesktopCastingReceiver/"
+            echo ""
+            echo "Your local IP: $LOCAL_IP"
+            echo ""
+            echo "Devices can connect via:"
+            echo "  https://$LOCAL_IP:8080"
+            echo ""
+        else
+            echo ""
+            echo "⚠ SSL certificate generation failed"
+            echo "You can generate them later using: ./setup_ssl_for_exe.sh"
+            echo ""
+        fi
+    fi
+
+    echo ""
+    echo "To run the application:"
+    echo "  cd dist/DesktopCastingReceiver"
+    echo "  ./DesktopCastingReceiver"
+    echo ""
 else
     echo ""
     echo "=================================="
