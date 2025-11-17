@@ -24,15 +24,11 @@ import hmac
 import numpy as np
 import cv2
 from typing import Optional, Dict, Tuple
-import logging
 
-# Enhanced logging - set to DEBUG for troubleshooting
-LOG_LEVEL = os.getenv('DEBUG', 'INFO')
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Use common logging
+from ..common import get_logger
+
+logger = get_logger(__name__)
 
 # Zeroconf import (required for mDNS/Bonjour service discovery)
 try:

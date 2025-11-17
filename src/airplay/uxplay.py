@@ -7,7 +7,6 @@ Captures actual video frames from UxPlay using various methods
 import subprocess
 import threading
 import time
-import logging
 import shutil
 import os
 import re
@@ -17,13 +16,10 @@ from typing import Optional
 import socket
 import struct
 
-# Enhanced logging
-LOG_LEVEL = os.getenv('DEBUG', 'INFO')
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Use common logging
+from ..common import get_logger
+
+logger = get_logger(__name__)
 
 
 class UxPlayIntegration:

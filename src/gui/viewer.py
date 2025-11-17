@@ -11,32 +11,31 @@ import cv2
 import numpy as np
 import threading
 import time
-import sys
-import importlib.util
-import os
 
-# Import server module - handle both development and PyInstaller bundled mode
-if getattr(sys, 'frozen', False):
-    # Running in PyInstaller bundle
-    base_path = sys._MEIPASS
-else:
-    # Running in development
-    base_path = os.path.dirname(os.path.abspath(__file__))
+from ..common import get_logger, get_config, get_local_ip
 
-server_path = os.path.join(base_path, "server.py")
-spec = importlib.util.spec_from_file_location("server", server_path)
-server_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(server_module)
-
-stream_manager = server_module.stream_manager
+logger = get_logger(__name__)
 
 
 class StreamViewer:
     """Main GUI application for viewing multiple streams"""
 
-    def __init__(self, root):
+    def __init__(self, root, stream_manager, server_runner=None, config=None):
+        """
+        Initialize the stream viewer
+
+        Args:
+            root: Tkinter root window
+            stream_manager: StreamManager instance
+            server_runner: Callable to start the server (optional)
+            config: GUI configuration (optional)
+        """
         self.root = root
-        self.root.title("Desktop Casting Receiver - Monitoring Station")
+        self.stream_manager = stream_manager
+        self.server_runner = server_runner
+        self.config = config or get_config().gui
+
+        self.root.title(self.config.window_title)
         self.root.geometry("1920x1080")
         self.root.configure(bg="#1e1e1e")
 
@@ -267,7 +266,7 @@ class StreamViewer:
         frame.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
 
         # Get stream data
-        streams = stream_manager.get_all_streams()
+        streams = self.stream_manager.get_all_streams()
         stream_data = streams.get(client_id, {})
         name = stream_data.get('name', 'Unknown')
 
@@ -302,7 +301,7 @@ class StreamViewer:
         self.expanded_label = None
 
         # Rebuild the grid with current streams
-        streams = stream_manager.get_all_streams()
+        streams = self.stream_manager.get_all_streams()
         client_ids = sorted(streams.keys())
         self.create_stream_grid(client_ids)
 
@@ -315,10 +314,13 @@ class StreamViewer:
 
     def start_server(self):
         """Start the WebRTC server in a separate thread"""
+        if not self.server_runner:
+            messagebox.showerror("Error", "Server runner not configured")
+            return
+
         try:
             self.server_thread = threading.Thread(
-                target=server_module.run_server,
-                args=('0.0.0.0', 8080),
+                target=self.server_runner,
                 daemon=True
             )
             self.server_thread.start()
@@ -328,15 +330,7 @@ class StreamViewer:
             self.server_btn.config(text="Stop Server", bg="#e74c3c")
 
             # Get local IP
-            import socket
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                s.connect(("8.8.8.8", 80))
-                local_ip = s.getsockname()[0]
-            except:
-                local_ip = "localhost"
-            finally:
-                s.close()
+            local_ip = get_local_ip() or "localhost"
 
             messagebox.showinfo(
                 "Server Started",
@@ -394,7 +388,7 @@ class StreamViewer:
             return
 
         try:
-            streams = stream_manager.get_all_streams()
+            streams = self.stream_manager.get_all_streams()
             active_count = len(streams)
             client_ids = sorted(streams.keys())
 

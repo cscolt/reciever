@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desktop-casting-receiver"
+version = "2.0.0"
+description = "Multi-device screen casting receiver for Chrome, Android, iOS, and desktop"
+authors = [
+    {name = "Desktop Casting Receiver Team"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+keywords = ["casting", "screen-sharing", "webrtc", "airplay", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video :: Capture",
+    "Topic :: System :: Monitoring",
+]
+
+dependencies = [
+    "aiohttp==3.9.1",
+    "aiortc==1.6.0",
+    "opencv-python==4.8.1.78",
+    "Pillow==10.1.0",
+    "numpy==1.24.3",
+    "av==11.0.0",
+    "websockets==12.0",
+    "zeroconf==0.132.2",
+    "ifaddr>=0.1.7",
+    "srp==1.0.20",
+    "cryptography==41.0.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller==6.3.0",
+    "black",
+    "pylint",
+    "pytest",
+]
+
+[project.scripts]
+desktop-casting-receiver = "src:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/desktop-casting-receiver"
+Documentation = "https://github.com/yourusername/desktop-casting-receiver/blob/master/README.md"
+Repository = "https://github.com/yourusername/desktop-casting-receiver"
+Issues = "https://github.com/yourusername/desktop-casting-receiver/issues"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | build
+  | dist
+)/
+'''
+
+[tool.pylint.messages_control]
+disable = [
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name
+    "R0913",  # too-many-arguments
+    "R0914",  # too-many-locals
+]
+
+[tool.pylint.format]
+max-line-length = 100
