@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import threading
 import time
+import sys
 
 from ..common import get_logger, get_config, get_local_ip
 

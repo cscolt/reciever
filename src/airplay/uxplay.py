@@ -211,52 +211,71 @@ class UxPlayIntegration:
             logger.debug("Exception details:", exc_info=True)
             self.udp_socket = None
 
-    def _capture_udp_frames(self):
-        """Capture video frames from UDP stream"""
-        logger.info("Starting UDP frame capture...")
+    def _capture_shm_frames(self):
+        """Capture video frames from GStreamer shared memory"""
+        logger.info("Starting shared memory frame capture...")
 
-        frame_width = 1280
-        frame_height = 720
-        frame_size = frame_width * frame_height * 3  # RGB
-
-        buffer = b''
-
+        # Build GStreamer pipeline to read from shared memory
         try:
-            while self.running and self.udp_socket:
-                try:
-                    # Receive UDP packet
-                    data, addr = self.udp_socket.recvfrom(65536)
-                    buffer += data
+            import gi
+            gi.require_version('Gst', '1.0')
+            from gi.repository import Gst, GLib
 
-                    # Process complete frames
-                    while len(buffer) >= frame_size:
-                        frame_data = buffer[:frame_size]
-                        buffer = buffer[frame_size:]
+            Gst.init(None)
 
+            # Pipeline to read from shmsrc
+            pipeline_str = (
+                f"shmsrc socket-path=/tmp/uxplay_frames is-live=true ! "
+                f"video/x-raw,format=BGR,width=1280,height=720,framerate=30/1 ! "
+                f"appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
+            )
+
+            pipeline = Gst.parse_launch(pipeline_str)
+            appsink = pipeline.get_by_name('sink')
+
+            def on_new_sample(sink):
+                sample = sink.emit('pull-sample')
+                if sample:
+                    buf = sample.get_buffer()
+                    caps = sample.get_caps()
+
+                    # Get frame data
+                    success, map_info = buf.map(Gst.MapFlags.READ)
+                    if success:
                         # Convert to numpy array
-                        frame = np.frombuffer(frame_data, dtype=np.uint8)
-                        frame = frame.reshape((frame_height, frame_width, 3))
+                        frame = np.frombuffer(map_info.data, dtype=np.uint8)
+                        frame = frame.reshape((720, 1280, 3))
 
-                        # Convert RGB to BGR for OpenCV
-                        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-                        # Update all active clients with this frame
+                        # Update all active clients
                         for device_name, client_info in list(self.active_clients.items()):
-                            self.stream_manager.update_stream(client_info['client_id'], frame)
+                            self.stream_manager.update_stream(client_info['client_id'], frame.copy())
 
-                        logger.debug(f"Captured frame: {frame.shape}")
+                        buf.unmap(map_info)
 
-                except socket.timeout:
-                    continue
-                except Exception as e:
-                    logger.debug(f"UDP capture error: {e}")
-                    continue
+                return Gst.FlowReturn.OK
 
+            appsink.connect('new-sample', on_new_sample)
+            pipeline.set_state(Gst.State.PLAYING)
+
+            # Run GLib main loop
+            loop = GLib.MainLoop()
+            try:
+                while self.running:
+                    loop.get_context().iteration(True)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                pipeline.set_state(Gst.State.NULL)
+
+        except ImportError:
+            logger.warning("GStreamer Python bindings not available")
+            logger.warning("Install with: sudo apt-get install python3-gi python3-gst-1.0")
+            logger.info("Falling back to placeholder frames")
         except Exception as e:
-            logger.error(f"UDP frame capture failed: {e}")
+            logger.error(f"Shared memory frame capture failed: {e}")
             logger.debug("Exception details:", exc_info=True)
         finally:
-            logger.info("UDP frame capture stopped")
+            logger.info("Frame capture stopped")
 
     def stop(self):
         """Stop UxPlay subprocess"""
