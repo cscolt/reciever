@@ -226,49 +226,93 @@ class UxPlayIntegration:
 
             Gst.init(None)
 
+            # Wait for UxPlay to create the shared memory socket
+            socket_path = '/tmp/uxplay_frames'
+            max_wait = 10  # seconds
+            wait_interval = 0.5
+            waited = 0
+
+            logger.info(f"Waiting for UxPlay to create shared memory at {socket_path}...")
+            while waited < max_wait and self.running:
+                if os.path.exists(socket_path):
+                    logger.info(f"✓ Shared memory socket found after {waited:.1f}s")
+                    break
+                time.sleep(wait_interval)
+                waited += wait_interval
+
+            if not os.path.exists(socket_path):
+                logger.warning(f"Shared memory socket not found after {max_wait}s")
+                logger.warning("UxPlay may not have started the video stream yet")
+                logger.info("Will retry when iPhone connects...")
+                return
+
+            # Give UxPlay a moment to fully initialize the socket
+            time.sleep(0.5)
+
             # Pipeline to read from shmsrc
             pipeline_str = (
-                f"shmsrc socket-path=/tmp/uxplay_frames is-live=true ! "
+                f"shmsrc socket-path={socket_path} is-live=true do-timestamp=true ! "
                 f"video/x-raw,format=BGR,width=1280,height=720,framerate=30/1 ! "
                 f"appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
             )
 
+            logger.debug(f"GStreamer pipeline: {pipeline_str}")
             pipeline = Gst.parse_launch(pipeline_str)
             appsink = pipeline.get_by_name('sink')
 
             def on_new_sample(sink):
-                sample = sink.emit('pull-sample')
-                if sample:
-                    buf = sample.get_buffer()
-                    caps = sample.get_caps()
+                try:
+                    sample = sink.emit('pull-sample')
+                    if sample:
+                        buf = sample.get_buffer()
 
-                    # Get frame data
-                    success, map_info = buf.map(Gst.MapFlags.READ)
-                    if success:
-                        # Convert to numpy array
-                        frame = np.frombuffer(map_info.data, dtype=np.uint8)
-                        frame = frame.reshape((720, 1280, 3))
+                        # Get frame data
+                        success, map_info = buf.map(Gst.MapFlags.READ)
+                        if success:
+                            try:
+                                # Convert to numpy array
+                                frame = np.frombuffer(map_info.data, dtype=np.uint8)
+                                frame = frame.reshape((720, 1280, 3))
 
-                        # Update all active clients
-                        for device_name, client_info in list(self.active_clients.items()):
-                            self.stream_manager.update_stream(client_info['client_id'], frame.copy())
+                                # Update all active clients
+                                for device_name, client_info in list(self.active_clients.items()):
+                                    self.stream_manager.update_stream(client_info['client_id'], frame.copy())
 
-                        buf.unmap(map_info)
+                                logger.debug(f"Frame captured and distributed to {len(self.active_clients)} client(s)")
+                            finally:
+                                buf.unmap(map_info)
 
-                return Gst.FlowReturn.OK
+                    return Gst.FlowReturn.OK
+                except Exception as e:
+                    logger.error(f"Error in on_new_sample: {e}")
+                    return Gst.FlowReturn.ERROR
 
             appsink.connect('new-sample', on_new_sample)
-            pipeline.set_state(Gst.State.PLAYING)
+
+            # Set pipeline to PLAYING state
+            ret = pipeline.set_state(Gst.State.PLAYING)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                logger.error("Failed to start GStreamer pipeline")
+                pipeline.set_state(Gst.State.NULL)
+                return
+
+            logger.info("✓ GStreamer pipeline started successfully")
 
             # Run GLib main loop
             loop = GLib.MainLoop()
             try:
                 while self.running:
-                    loop.get_context().iteration(True)
+                    # Process GLib events
+                    context = loop.get_context()
+                    while context.pending():
+                        context.iteration(True)
+                    time.sleep(0.01)  # Small delay to prevent CPU spinning
             except KeyboardInterrupt:
-                pass
+                logger.info("Keyboard interrupt in frame capture")
             finally:
+                logger.info("Stopping GStreamer pipeline...")
                 pipeline.set_state(Gst.State.NULL)
+                logger.info("GStreamer pipeline stopped")
 
         except ImportError:
             logger.warning("GStreamer Python bindings not available")
