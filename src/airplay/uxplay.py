@@ -120,13 +120,13 @@ class UxPlayIntegration:
     def _start_with_gstreamer(self) -> bool:
         """Start UxPlay with GStreamer video sink for frame capture"""
         try:
-            # GStreamer pipeline that outputs to UDP
-            # We'll capture these UDP packets and decode them
+            # Use shmsink for efficient IPC between UxPlay and our Python code
             gst_pipeline = (
                 f"videoconvert ! "
                 f"videoscale ! "
-                f"video/x-raw,width=1280,height=720,format=RGB ! "
-                f"udpsink host=127.0.0.1 port={self.udp_port}"
+                f"video/x-raw,width=1280,height=720,format=BGR ! "
+                f"shmsink socket-path=/tmp/uxplay_frames wait-for-connection=false "
+                f"shm-size=10000000 sync=false"
             )
 
             cmd = [
@@ -135,6 +135,7 @@ class UxPlayIntegration:
                 '-p',  # Disable audio
                 '-vs', gst_pipeline,  # Custom video sink
                 '-reset', '5',
+                '-vp', '0',  # Disable hardware acceleration issues
             ]
 
             logger.debug(f"UxPlay command: {' '.join(cmd)}")
@@ -147,17 +148,19 @@ class UxPlayIntegration:
                 bufsize=1
             )
 
+            # Start shared memory frame capture
+            threading.Thread(target=self._capture_shm_frames, daemon=True).start()
+
             self.running = True
-
-            # Start UDP listener for video frames
-            self._start_udp_listener()
-
+            logger.info("✓ UxPlay started with GStreamer shared memory capture")
             return True
 
         except Exception as e:
             logger.error(f"Failed to start UxPlay with GStreamer: {e}")
             logger.debug("Exception details:", exc_info=True)
-            return False
+            # Fall back to basic mode
+            logger.info("Falling back to basic mode (placeholder frames)")
+            return self._start_basic()
 
     def _start_basic(self) -> bool:
         """Start UxPlay in basic mode (no video capture)"""
