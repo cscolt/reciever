@@ -25,6 +25,7 @@ a = Analysis(
         'opencv-python',
         'numpy',
         'PIL',
+        'PIL._tkinter_finder',
         'websockets',
         # Zeroconf - using collect_all but keeping these for completeness
         'zeroconf',
