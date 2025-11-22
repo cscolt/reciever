@@ -353,11 +353,11 @@ class StreamViewer:
             messagebox.showerror("Error", f"Failed to start server: {e}")
 
     def stop_server(self):
-        """Stop the server (requires app restart)"""
+        """Stop the server (requires app closing)"""
         response = messagebox.askyesno(
             "Stop Server",
-            "Stopping the server requires restarting the application.\n"
-            "Do you want to restart now?"
+            "Stopping the server requires closing the application.\n"
+            "Do you want to close now?"
         )
         if response:
             self.on_closing()
