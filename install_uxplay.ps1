@@ -1,4 +1,4 @@
-# UxPlay Installation Script for Windows
+﻿# UxPlay Installation Script for Windows
 # Automates the process of installing UxPlay for iOS screen mirroring
 
 Write-Host "========================================" -ForegroundColor Cyan
@@ -12,7 +12,7 @@ Write-Host ""
 # Check if running as administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Host "⚠ Warning: Not running as administrator" -ForegroundColor Yellow
+    Write-Host "âš  Warning: Not running as administrator" -ForegroundColor Yellow
     Write-Host "Some installation steps may require administrator privileges" -ForegroundColor Yellow
     Write-Host ""
 }
@@ -20,7 +20,7 @@ if (-not $isAdmin) {
 # Check if UxPlay is already installed
 $uxplayExists = Get-Command uxplay -ErrorAction SilentlyContinue
 if ($uxplayExists) {
-    Write-Host "✓ UxPlay is already installed!" -ForegroundColor Green
+    Write-Host "âœ“ UxPlay is already installed!" -ForegroundColor Green
     & uxplay -h 2>&1 | Select-Object -First 1
     Write-Host ""
     $reinstall = Read-Host "Do you want to reinstall/update UxPlay? (y/N)"
@@ -48,9 +48,9 @@ Write-Host ""
 Write-Host "Checking for Git..." -ForegroundColor Yellow
 $gitExists = Get-Command git -ErrorAction SilentlyContinue
 if ($gitExists) {
-    Write-Host "  ✓ Git is installed" -ForegroundColor Green
+    Write-Host "  âœ“ Git is installed" -ForegroundColor Green
 } else {
-    Write-Host "  ✗ Git is not installed" -ForegroundColor Red
+    Write-Host "  âœ— Git is not installed" -ForegroundColor Red
     Write-Host ""
     Write-Host "Please install Git first:" -ForegroundColor Yellow
     Write-Host "  Download from: https://git-scm.com/download/win" -ForegroundColor White
@@ -68,11 +68,11 @@ if ($gitExists) {
 Write-Host "Checking for CMake..." -ForegroundColor Yellow
 $cmakeExists = Get-Command cmake -ErrorAction SilentlyContinue
 if ($cmakeExists) {
-    Write-Host "  ✓ CMake is installed" -ForegroundColor Green
+    Write-Host "  âœ“ CMake is installed" -ForegroundColor Green
     $cmakeVersion = & cmake --version 2>&1 | Select-Object -First 1
     Write-Host "    $cmakeVersion" -ForegroundColor Gray
 } else {
-    Write-Host "  ✗ CMake is not installed" -ForegroundColor Red
+    Write-Host "  âœ— CMake is not installed" -ForegroundColor Red
     Write-Host ""
     Write-Host "Please install CMake:" -ForegroundColor Yellow
     Write-Host "  Download from: https://cmake.org/download/" -ForegroundColor White
@@ -97,12 +97,12 @@ if (Test-Path $vsWhere) {
     $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if ($vsPath) {
         $vsInstalled = $true
-        Write-Host "  ✓ Visual Studio Build Tools are installed" -ForegroundColor Green
+        Write-Host "  âœ“ Visual Studio Build Tools are installed" -ForegroundColor Green
     }
 }
 
 if (-not $vsInstalled) {
-    Write-Host "  ✗ Visual Studio Build Tools are not installed" -ForegroundColor Red
+    Write-Host "  âœ— Visual Studio Build Tools are not installed" -ForegroundColor Red
     Write-Host ""
     Write-Host "Visual Studio Build Tools are required to compile UxPlay." -ForegroundColor Yellow
     Write-Host ""
@@ -131,9 +131,9 @@ $gstreamPath = "C:\gstreamer\1.0\msvc_x86_64\bin"
 $gstreamExists = Test-Path $gstreamPath
 
 if ($gstreamExists) {
-    Write-Host "  ✓ GStreamer appears to be installed" -ForegroundColor Green
+    Write-Host "  âœ“ GStreamer appears to be installed" -ForegroundColor Green
 } else {
-    Write-Host "  ⚠ GStreamer not found at default location" -ForegroundColor Yellow
+    Write-Host "  âš  GStreamer not found at default location" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "GStreamer is required for video processing." -ForegroundColor Yellow
     Write-Host ""
@@ -180,7 +180,7 @@ try {
     }
     Set-Location UxPlay
 
-    Write-Host "✓ Downloaded successfully" -ForegroundColor Green
+    Write-Host "âœ“ Downloaded successfully" -ForegroundColor Green
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
@@ -222,7 +222,7 @@ try {
     }
 
     Write-Host ""
-    Write-Host "✓ Build completed successfully" -ForegroundColor Green
+    Write-Host "âœ“ Build completed successfully" -ForegroundColor Green
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
@@ -234,7 +234,7 @@ try {
     $installDir = "C:\Program Files\UxPlay"
 
     if (-not $isAdmin) {
-        Write-Host "⚠ Administrator privileges required for installation" -ForegroundColor Yellow
+        Write-Host "âš  Administrator privileges required for installation" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Please choose an installation location:" -ForegroundColor Yellow
         Write-Host "  1. C:\Program Files\UxPlay (requires admin)" -ForegroundColor White
@@ -256,7 +256,7 @@ try {
     $exePath = Get-ChildItem -Recurse -Filter "uxplay.exe" | Select-Object -First 1
     if ($exePath) {
         Copy-Item $exePath.FullName -Destination $installDir
-        Write-Host "✓ Copied uxplay.exe to $installDir" -ForegroundColor Green
+        Write-Host "âœ“ Copied uxplay.exe to $installDir" -ForegroundColor Green
     } else {
         throw "Could not find uxplay.exe in build output"
     }
@@ -268,17 +268,17 @@ try {
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($currentPath -notlike "*$installDir*") {
         [Environment]::SetEnvironmentVariable("Path", "$currentPath;$installDir", "User")
-        Write-Host "✓ Added to PATH" -ForegroundColor Green
+        Write-Host "âœ“ Added to PATH" -ForegroundColor Green
         Write-Host "  Note: You may need to restart your terminal" -ForegroundColor Gray
     } else {
-        Write-Host "✓ Already in PATH" -ForegroundColor Green
+        Write-Host "âœ“ Already in PATH" -ForegroundColor Green
     }
 
     # Update current session PATH
     $env:Path += ";$installDir"
 
     Write-Host ""
-    Write-Host "✓ Installation completed successfully" -ForegroundColor Green
+    Write-Host "âœ“ Installation completed successfully" -ForegroundColor Green
 
 } catch {
     Write-Host ""
@@ -309,7 +309,7 @@ Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "✓ Installation Complete!" -ForegroundColor Green
+Write-Host "âœ“ Installation Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
@@ -321,11 +321,11 @@ if ($uxplayCommand) {
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Cyan
     Write-Host "  1. Run your Desktop Casting Receiver application" -ForegroundColor White
-    Write-Host "  2. On your iPhone/iPad: Control Center → Screen Mirroring" -ForegroundColor White
+    Write-Host "  2. On your iPhone/iPad: Control Center â†’ Screen Mirroring" -ForegroundColor White
     Write-Host "  3. Select 'Desktop Casting Receiver'" -ForegroundColor White
     Write-Host ""
 } else {
-    Write-Host "⚠ Warning: UxPlay command not found in PATH" -ForegroundColor Yellow
+    Write-Host "âš  Warning: UxPlay command not found in PATH" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "You may need to:" -ForegroundColor Yellow
     Write-Host "  - Restart your terminal or PowerShell" -ForegroundColor White
