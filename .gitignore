@@ -41,3 +41,6 @@ test_*.py
 *.pem
 cert.pem
 key.pem
+
+# Local development scripts
+install_uxplay_fixed.ps1
