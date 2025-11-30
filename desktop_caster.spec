@@ -13,10 +13,13 @@ a = Analysis(
     binaries=zeroconf_binaries + ifaddr_binaries,
     datas=[
         ('client.html', '.'),
+        ('cast_receiver.html', '.'),
+        ('cast_sender.html', '.'),
         ('server.py', '.'),
         ('airplay_receiver.py', '.'),
         ('uxplay_integration.py', '.'),
         ('mdns_discovery.py', '.'),
+        ('cast_discovery.py', '.'),
     ] + zeroconf_datas + ifaddr_datas,
     hiddenimports=[
         'aiortc',

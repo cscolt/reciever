@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Desktop Casting Receiver is a Python application that allows Chromebooks, iPhones, Android phones, and other devices to cast their screens (or camera) to a monitoring station over WebRTC. It can monitor up to 8 simultaneous video streams in real-time using a tkinter GUI interface.
+Desktop Casting Receiver is a Python application that allows Chromebooks, iPhones, Android phones, and other devices to cast their screens (or camera) to a monitoring station. It supports multiple connection methods:
+- **WebRTC**: Direct browser-based screen/tab/camera sharing
+- **Google Cast**: Native Cast protocol for managed devices (appears in Chrome Cast menu)
+- **AirPlay**: iOS screen mirroring via UxPlay or pure Python implementation
+
+The application can monitor up to 8 simultaneous video streams in real-time using a tkinter GUI interface.
 
 ## Common Commands
 
@@ -98,24 +103,64 @@ python viewer.py
 
 6. **run.py**: Simple launcher script that imports and runs viewer.main()
 
+7. **cast_receiver.html**: Google Cast Web Receiver application
+   - Implements Google Cast SDK for Cast protocol support
+   - Handles Cast session management and custom namespaces
+   - Coordinates with senders to establish WebRTC connections
+   - Integrates Cast streams into StreamManager via WebRTC
+   - Allows managed Chromebooks to cast without URL restrictions
+   - URL: `/cast_receiver` (registered with Google Cast Developer Console)
+
+8. **cast_sender.html**: Google Cast sender application for testing
+   - Implements Google Cast Sender SDK
+   - Allows manual Cast connections for testing
+   - Sets up WebRTC screen/tab capture
+   - Communicates with receiver via Cast custom namespaces
+   - URL: `/cast_sender` (for testing Cast functionality)
+
+9. **cast_discovery.py**: mDNS advertiser for Google Cast discovery
+   - Advertises receiver as `_googlecast._tcp.local.` service
+   - Makes receiver appear in Chrome/Android Cast menus
+   - Uses zeroconf library for mDNS/Bonjour
+   - Provides device ID, capabilities, and receiver URL
+   - Automatically started with server when `enable_cast=True`
+
+10. **mdns_discovery.py**: Generic mDNS advertiser for WebRTC discovery
+    - Advertises receiver for direct WebRTC connections
+    - Separate from Cast discovery (different service types)
+    - Helps Chromebooks discover receiver without manual URL entry
+
 ### Data Flow
 
 ```
-Desktop/Chromebook (screen) ─┐
-                             │
-Android (screen/camera) ─────┼──> WebRTC ──> server.py (StreamManager) ──> viewer.py (GUI)
-                             │                         ↓
-iOS (browser camera) ────────┤                  numpy frames stored in
-                             │                  thread-safe dictionary
-iOS (AirPlay via UxPlay) ────┤                         ↑
-                             │                        │
-                             │                   ┌────┴─────┐
-                             │                   │          │
-                             └────────> uxplay_integration.py  airplay_receiver.py
-                                       (subprocess wrapper)    (Python fallback)
-                                              ↓                        ↓
-                                          UxPlay binary            mDNS only
-                                        (real mirroring)        (incomplete)
+Desktop/Chromebook (WebRTC URL) ─────┐
+                                     │
+Desktop/Chromebook (Cast button) ────┼──> Cast Protocol ──┐
+                                     │                     │
+Android (WebRTC URL) ────────────────┤                     ├─> WebRTC ──> server.py
+                                     │                     │              (StreamManager)
+Android (Cast button) ───────────────┼──> Cast Protocol ──┘                   │
+                                     │                                         ↓
+iOS (browser camera) ────────────────┤                              numpy frames stored
+                                     │                              in thread-safe dict
+iOS (AirPlay) ───────────────────────┤                                         │
+                                     │                                         │
+                                     └────────────────────────────────────> viewer.py
+                                                                              (GUI)
+
+Cast Discovery Flow:
+─────────────────────
+cast_discovery.py ──> mDNS (_googlecast._tcp) ──> Chrome/Android ──> User clicks Cast
+                                                                   ──> Selects receiver
+                                                                   ──> Cast session starts
+                                                                   ──> WebRTC negotiation
+                                                                   ──> Video stream
+
+AirPlay Flow:
+────────────
+uxplay_integration.py ──> UxPlay binary ──> mDNS (_airplay._tcp) ──> iOS discovers
+     (or)                                                           ──> User mirrors
+airplay_receiver.py ──────────────────────> mDNS (_airplay._tcp) ──> Encrypted stream
 ```
 
 ### Key Design Patterns
@@ -334,6 +379,89 @@ pipeline = f"uxplay ... ! videoconvert ! appsink"
 # Use opencv to capture from appsink
 ```
 
+### Google Cast Support for Managed Chromebooks/Android
+
+The application includes full Google Cast protocol support to allow managed devices (with URL restrictions) to cast via the native Cast button:
+
+**Architecture** (cast_receiver.html, cast_sender.html, cast_discovery.py):
+- Cast receiver implements Google Cast Web Receiver SDK
+- Cast sender provides testing interface for manual connections
+- Cast discovery advertises receiver as `_googlecast._tcp.local.` service
+- Uses Cast custom namespaces for WebRTC coordination
+- Integrates seamlessly with existing StreamManager
+
+**Why Google Cast Support?**:
+- **Managed Devices**: Many schools/enterprises block arbitrary URL access but allow Cast
+- **Native Integration**: Appears in Chrome's Cast button menu (no URL to type)
+- **User Familiarity**: Users already know how to use Cast button
+- **Multiple Protocols**: Works alongside WebRTC and AirPlay, not replacing them
+
+**Connection Flow**:
+1. `cast_discovery.py` advertises receiver via mDNS
+2. Chrome/Android discovers "Desktop Casting Receiver" in Cast menu
+3. User clicks Cast button → Screen Mirroring → Selects receiver
+4. Cast SDK establishes session with receiver
+5. Cast custom namespace coordinates WebRTC offer/answer
+6. WebRTC handles actual video streaming
+7. Stream appears in StreamManager alongside other streams
+
+**Implementation Details** (cast_receiver.html:180-360):
+- Initializes Cast Receiver SDK with `cast.framework.CastReceiverContext`
+- Configures custom namespace: `urn:x-cast:com.desktop.casting.screenmirror`
+- Handles Cast sender connections/disconnections
+- Receives WebRTC offer via Cast messages
+- Creates WebRTC peer connection and sends answer back
+- Each Cast sender gets independent stream in StreamManager
+
+**Discovery Details** (cast_discovery.py:45-95):
+- Advertises as Google Cast device using zeroconf
+- Service type: `_googlecast._tcp.local.`
+- Properties include:
+  - Device ID (UUID)
+  - Friendly name ("Desktop Casting Receiver")
+  - Capabilities (video/audio output, screen mirroring)
+  - Receiver URL (for Google Cast Console registration)
+- Automatically started when `enable_cast=True` in `server.py`
+
+**Setup Requirements**:
+1. Register application at https://cast.google.com/publish/
+2. Provide receiver URL: `http://YOUR_IP:8080/cast_receiver`
+3. Get Application ID (e.g., `ABCD1234`)
+4. For testing: Register device serial numbers
+5. For production: Submit app for review
+
+**URL Endpoints**:
+- `/cast_receiver` - Cast Web Receiver (registered with Google)
+- `/cast_sender` - Cast sender page for manual testing
+- Both integrate with existing `/offer` WebRTC endpoint
+
+**Integration with Server** (server.py:333-348):
+```python
+if enable_cast:
+    from cast_discovery import CastDiscovery
+    cast_discovery = CastDiscovery("Desktop Casting Receiver", port, protocol)
+    cast_discovery.start()
+    # Receiver now appears in Cast menus
+```
+
+**Advantages**:
+- Works on URL-restricted managed Chromebooks
+- Native Cast button integration
+- No URL to remember or type
+- Supports multiple simultaneous Cast sessions
+- Falls back gracefully if Cast not needed
+
+**Limitations**:
+- Requires Google Cast registration (one-time, free)
+- Needs same network connectivity as WebRTC
+- Testing requires device serial number registration
+- Production requires Google approval (1-3 days)
+
+**Documentation**:
+- Complete setup guide: `CAST_SETUP.md`
+- Includes troubleshooting, network requirements, and deployment examples
+- Step-by-step registration and testing instructions
+
 ### Module Import Pattern
 The viewer imports server functionality using:
 ```python
@@ -348,7 +476,8 @@ This allows viewer.py to access the same StreamManager instance that the server 
 
 The `desktop_caster.spec` file bundles:
 - viewer.py as the entry point
-- client.html, server.py, airplay_receiver.py, and uxplay_integration.py as data files
+- HTML files: client.html, cast_receiver.html, cast_sender.html
+- Python modules: server.py, airplay_receiver.py, uxplay_integration.py, mdns_discovery.py, cast_discovery.py
 - All hidden imports for aiortc, aiohttp, av, opencv, numpy, PIL, websockets, zeroconf
 
 When building, ensure all dependencies are installed in the virtual environment first.
@@ -357,12 +486,51 @@ When building, ensure all dependencies are installed in the virtual environment 
 
 ## Network Requirements
 
-- All devices must be on the same local network
-- Port 8080 must be accessible for WebRTC/browser connections (check firewall settings)
-- Port 7000 must be accessible for Python AirPlay receiver (fallback mode)
-- Port 7100 must be accessible for UxPlay video mirroring (if UxPlay is installed)
-- mDNS/Bonjour must be enabled on the network for AirPlay device discovery
+- All devices must be on the same local network (or same VLAN)
+- **Port 8080/TCP** must be accessible for HTTP/WebRTC/Cast connections (check firewall)
+- **Port 7000/TCP** must be accessible for Python AirPlay receiver (fallback mode)
+- **Port 7100/TCP** must be accessible for UxPlay video mirroring (if UxPlay installed)
+- **Port 5353/UDP** must be open for mDNS/Bonjour discovery (AirPlay and Cast)
+- **WebRTC ports**: Ephemeral UDP ports for media streaming
+- **mDNS/Bonjour** must be enabled on the network:
+  - Required for AirPlay device discovery
+  - Required for Google Cast device discovery
+  - Often blocked in enterprise networks - work with IT to allowlist
 - For HTTPS, clients must accept self-signed certificate warnings
+
+**Cast-Specific Requirements**:
+- Same network/VLAN for Cast discovery
+- mDNS must not be blocked by firewall
+- For managed devices: Cast App ID may need to be allowlisted in MDM
+- For testing: Device serial numbers must be registered in Google Cast Console
+
+## Testing Google Cast Integration
+
+To verify Google Cast integration works:
+
+1. **Start the server**: `python run.py` or use the built executable
+2. **Check logs**: Should see "✓ Google Cast discovery enabled" message
+3. **Note the receiver URL**: Copy the Cast receiver URL from logs (e.g., `http://192.168.1.100:8080/cast_receiver`)
+4. **Register with Google**:
+   - Visit https://cast.google.com/publish/
+   - Create new Custom Receiver application
+   - Use the receiver URL from step 3
+   - Get your Application ID
+   - Add test device serial numbers
+5. **Test from Chrome**:
+   - On Chromebook or Chrome browser (same network as server)
+   - Click Cast button in Chrome toolbar (⏏️ icon)
+   - Should see "Desktop Casting Receiver" in the list
+   - Select it and choose "Cast tab" or "Cast screen"
+   - Stream should appear in GUI
+6. **Alternative test using Cast sender page**:
+   - Visit `http://YOUR_SERVER_IP:8080/cast_sender`
+   - Enter your Application ID
+   - Click "Initialize Cast SDK"
+   - Click "Start Casting"
+   - Select screen/window/tab to share
+
+If Cast discovery fails, check firewall settings and ensure port 5353/UDP is open for mDNS.
 
 ## Testing UxPlay Integration
 

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desktop Casting Receiver - Cast Receiver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .logo {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #aaa;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .status-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .status-text {
+            flex: 1;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .connected {
+            color: #4CAF50;
+        }
+
+        .waiting {
+            color: #FFC107;
+        }
+
+        .error {
+            color: #F44336;
+        }
+
+        #debug-log {
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            color: #0f0;
+        }
+
+        .debug-entry {
+            margin-bottom: 5px;
+            opacity: 0;
+            animation: fadeIn 0.3s ease-in forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .instruction {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .instruction h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .instruction ol {
+            margin-left: 20px;
+        }
+
+        .instruction li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">📺</div>
+    <h1>Desktop Casting Receiver</h1>
+    <p class="subtitle">Google Cast Compatible Receiver</p>
+
+    <div class="status-container">
+        <div class="status-item">
+            <div class="status-icon">🔗</div>
+            <div class="status-text">
+                <div class="status-label">Cast SDK Status</div>
+                <div class="status-value" id="sdk-status">Initializing...</div>
+            </div>
+        </div>
+
+        <div class="status-item">
+            <div class="status-icon">📱</div>
+            <div class="status-text">
+                <div class="status-label">Active Senders</div>
+                <div class="status-value" id="sender-count">0</div>
+            </div>
+        </div>
+
+        <div class="status-item">
+            <div class="status-icon">🎥</div>
+            <div class="status-text">
+                <div class="status-label">Active Streams</div>
+                <div class="status-value" id="stream-count">0</div>
+            </div>
+        </div>
+
+        <div class="instruction">
+            <h3>How to Cast:</h3>
+            <ol>
+                <li>On your Chromebook or Android device, click the <strong>Cast</strong> button in Chrome</li>
+                <li>Select <strong>"Desktop Casting Receiver"</strong> from the list</li>
+                <li>Choose <strong>"Cast Screen"</strong> or <strong>"Cast Tab"</strong></li>
+                <li>Your screen will appear in the monitoring station</li>
+            </ol>
+        </div>
+
+        <div id="debug-log"></div>
+    </div>
+
+    <!-- Load Cast Web Receiver SDK -->
+    <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+
+    <script>
+        // Custom namespace for screen mirroring coordination
+        const SCREEN_MIRROR_NAMESPACE = 'urn:x-cast:com.desktop.casting.screenmirror';
+        const MESSAGE_NAMESPACE = 'urn:x-cast:com.desktop.casting.message';
+
+        let castReceiverContext = null;
+        let playerManager = null;
+        let activeSenders = new Set();
+        let activeStreams = new Map(); // senderId -> {peerConnection, clientId, stream}
+        let debugEnabled = true;
+
+        // Debug logging
+        function log(message, level = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = `[${timestamp}] ${message}`;
+            console.log(entry);
+
+            if (debugEnabled) {
+                const logDiv = document.getElementById('debug-log');
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'debug-entry';
+                entryDiv.textContent = entry;
+                logDiv.appendChild(entryDiv);
+                logDiv.scrollTop = logDiv.scrollHeight;
+
+                // Keep only last 20 entries
+                while (logDiv.children.length > 20) {
+                    logDiv.removeChild(logDiv.firstChild);
+                }
+            }
+        }
+
+        function updateStatus(sdkStatus = null, senderCount = null, streamCount = null) {
+            if (sdkStatus !== null) {
+                const statusEl = document.getElementById('sdk-status');
+                statusEl.textContent = sdkStatus;
+                statusEl.className = 'status-value ' +
+                    (sdkStatus.includes('Ready') ? 'connected' :
+                     sdkStatus.includes('Error') ? 'error' : 'waiting');
+            }
+            if (senderCount !== null) {
+                document.getElementById('sender-count').textContent = senderCount;
+            }
+            if (streamCount !== null) {
+                document.getElementById('stream-count').textContent = streamCount;
+            }
+        }
+
+        // Generate unique client ID for WebRTC integration
+        function generateClientId(senderId) {
+            return 'cast_' + senderId.substring(0, 8) + '_' + Date.now();
+        }
+
+        // Set up WebRTC peer connection for screen mirroring
+        async function setupWebRTCConnection(senderId, clientName) {
+            log(`Setting up WebRTC for sender: ${senderId}`);
+
+            const clientId = generateClientId(senderId);
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            });
+
+            // Handle incoming video track
+            pc.ontrack = (event) => {
+                log(`Received video track from ${clientName}`);
+                const stream = event.streams[0];
+                activeStreams.set(senderId, {
+                    peerConnection: pc,
+                    clientId: clientId,
+                    stream: stream,
+                    name: clientName
+                });
+                updateStatus(null, null, activeStreams.size);
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                log(`ICE connection state: ${pc.iceConnectionState}`);
+                if (pc.iceConnectionState === 'disconnected' ||
+                    pc.iceConnectionState === 'failed' ||
+                    pc.iceConnectionState === 'closed') {
+                    cleanupStream(senderId);
+                }
+            };
+
+            return { pc, clientId };
+        }
+
+        // Clean up stream when sender disconnects
+        function cleanupStream(senderId) {
+            const streamInfo = activeStreams.get(senderId);
+            if (streamInfo) {
+                log(`Cleaning up stream for sender: ${senderId}`);
+                if (streamInfo.peerConnection) {
+                    streamInfo.peerConnection.close();
+                }
+                activeStreams.delete(senderId);
+                updateStatus(null, null, activeStreams.size);
+
+                // Notify server to remove stream
+                fetch('/disconnect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_id: streamInfo.clientId })
+                }).catch(e => log(`Error notifying server: ${e}`));
+            }
+        }
+
+        // Handle custom messages for screen mirroring
+        async function handleScreenMirrorMessage(senderId, message) {
+            log(`Screen mirror message from ${senderId}: ${message.type}`);
+
+            switch (message.type) {
+                case 'offer':
+                    // Sender is offering WebRTC connection for screen sharing
+                    const clientName = message.clientName || `Cast Device ${senderId.substring(0, 8)}`;
+                    const { pc, clientId } = await setupWebRTCConnection(senderId, clientName);
+
+                    // Set remote description (offer from sender)
+                    await pc.setRemoteDescription(new RTCSessionDescription({
+                        type: message.offer.type,
+                        sdp: message.offer.sdp
+                    }));
+
+                    // Create answer
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+
+                    // Send answer back to sender
+                    castReceiverContext.sendCustomMessage(
+                        SCREEN_MIRROR_NAMESPACE,
+                        senderId,
+                        {
+                            type: 'answer',
+                            answer: {
+                                type: pc.localDescription.type,
+                                sdp: pc.localDescription.sdp
+                            },
+                            clientId: clientId
+                        }
+                    );
+
+                    log(`WebRTC answer sent to ${senderId}`);
+                    break;
+
+                case 'ice-candidate':
+                    // Add ICE candidate from sender
+                    const streamInfo = Array.from(activeStreams.values())
+                        .find(s => s.clientId === message.clientId);
+                    if (streamInfo && message.candidate) {
+                        await streamInfo.peerConnection.addIceCandidate(
+                            new RTCIceCandidate(message.candidate)
+                        );
+                        log(`ICE candidate added for ${senderId}`);
+                    }
+                    break;
+            }
+        }
+
+        // Initialize Cast Receiver
+        function initializeCastReceiver() {
+            log('Initializing Cast Receiver SDK...');
+
+            try {
+                // Get the Cast receiver context
+                castReceiverContext = cast.framework.CastReceiverContext.getInstance();
+                playerManager = castReceiverContext.getPlayerManager();
+
+                // Configure receiver options
+                const options = new cast.framework.CastReceiverOptions();
+
+                // Disable default media handling since we're doing custom screen mirroring
+                options.disableIdleTimeout = true;
+                options.maxInactivity = 3600; // 1 hour before considering sender disconnected
+
+                // Support custom namespaces for screen mirroring
+                options.customNamespaces = {};
+                options.customNamespaces[SCREEN_MIRROR_NAMESPACE] = cast.framework.system.MessageType.JSON;
+                options.customNamespaces[MESSAGE_NAMESPACE] = cast.framework.system.MessageType.JSON;
+
+                // Listen for sender connection/disconnection
+                castReceiverContext.addEventListener(
+                    cast.framework.system.EventType.SENDER_CONNECTED,
+                    (event) => {
+                        const senderId = event.senderId;
+                        activeSenders.add(senderId);
+                        log(`Sender connected: ${senderId}`);
+                        updateStatus(null, activeSenders.size, null);
+                    }
+                );
+
+                castReceiverContext.addEventListener(
+                    cast.framework.system.EventType.SENDER_DISCONNECTED,
+                    (event) => {
+                        const senderId = event.senderId;
+                        activeSenders.delete(senderId);
+                        log(`Sender disconnected: ${senderId}`);
+                        updateStatus(null, activeSenders.size, null);
+                        cleanupStream(senderId);
+                    }
+                );
+
+                // Listen for custom messages (screen mirroring)
+                castReceiverContext.addCustomMessageListener(
+                    SCREEN_MIRROR_NAMESPACE,
+                    (event) => {
+                        handleScreenMirrorMessage(event.senderId, event.data);
+                    }
+                );
+
+                // Listen for general messages
+                castReceiverContext.addCustomMessageListener(
+                    MESSAGE_NAMESPACE,
+                    (event) => {
+                        log(`Message from ${event.senderId}: ${JSON.stringify(event.data)}`);
+                    }
+                );
+
+                // Start the receiver
+                castReceiverContext.start(options);
+
+                log('Cast Receiver SDK initialized successfully');
+                updateStatus('Ready - Waiting for Cast devices', 0, 0);
+
+            } catch (error) {
+                log(`Error initializing Cast Receiver: ${error}`, 'error');
+                updateStatus('Error - Failed to initialize', null, null);
+                console.error('Cast Receiver initialization error:', error);
+            }
+        }
+
+        // Initialize when page loads and SDK is ready
+        window.addEventListener('load', () => {
+            log('Page loaded, waiting for Cast SDK...');
+
+            // Check if Cast SDK is available
+            if (typeof cast !== 'undefined' && cast.framework) {
+                initializeCastReceiver();
+            } else {
+                // Wait for SDK to load
+                window['__onGCastApiAvailable'] = (isAvailable) => {
+                    if (isAvailable) {
+                        initializeCastReceiver();
+                    } else {
+                        log('Cast SDK not available', 'error');
+                        updateStatus('Error - Cast SDK not loaded', null, null);
+                    }
+                };
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            activeStreams.forEach((_, senderId) => {
+                cleanupStream(senderId);
+            });
+        });
+    </script>
+</body>
+</html>

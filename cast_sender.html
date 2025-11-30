@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desktop Casting - Cast Sender</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .status-success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .status-warning {
+            background: #fff3e0;
+            color: #f57c00;
+            border-left: 4px solid #f57c00;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .cast-icon {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .preview {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .preview.active {
+            display: block;
+        }
+
+        .info-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .info-box strong {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="cast-icon">📡</span>Desktop Casting (Cast)</h1>
+        <p class="subtitle">Cast your screen using Google Cast protocol</p>
+
+        <div id="status" class="status hidden"></div>
+
+        <div class="info-box">
+            <strong>Note:</strong> This uses Google Cast protocol to connect to the receiver.
+            Your device must be on the same network as the receiver.
+        </div>
+
+        <div class="input-group">
+            <label for="clientName">Your Name / Device Name</label>
+            <input type="text" id="clientName" placeholder="e.g., John's Chromebook" value="">
+        </div>
+
+        <div class="input-group">
+            <label for="appId">Cast Application ID</label>
+            <input type="text" id="appId" placeholder="Enter your Cast App ID" value="">
+            <small style="color: #999; display: block; margin-top: 5px;">
+                Get this from <a href="https://cast.google.com/publish/" target="_blank">Google Cast Developer Console</a>
+            </small>
+        </div>
+
+        <button id="initBtn" class="btn-secondary" onclick="initializeCast()">
+            <span class="cast-icon">🔗</span> Initialize Cast SDK
+        </button>
+
+        <button id="startBtn" class="btn-primary hidden" onclick="startCasting()">
+            <span class="cast-icon">📺</span> Start Casting
+        </button>
+
+        <button id="stopBtn" class="btn-danger hidden" onclick="stopCasting()">
+            Stop Casting
+        </button>
+
+        <video id="preview" class="preview" autoplay muted playsinline></video>
+    </div>
+
+    <!-- Load Cast Sender SDK -->
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+
+    <script>
+        // Custom namespace for screen mirroring
+        const SCREEN_MIRROR_NAMESPACE = 'urn:x-cast:com.desktop.casting.screenmirror';
+        const MESSAGE_NAMESPACE = 'urn:x-cast:com.desktop.casting.message';
+
+        let castSession = null;
+        let localStream = null;
+        let peerConnection = null;
+        let applicationId = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status status-${type}`;
+            statusDiv.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            document.getElementById('status').classList.add('hidden');
+        }
+
+        // Initialize Cast SDK
+        function initializeCast() {
+            const appIdInput = document.getElementById('appId').value.trim();
+
+            if (!appIdInput) {
+                showStatus('Please enter a Cast Application ID', 'error');
+                return;
+            }
+
+            applicationId = appIdInput;
+            showStatus('Initializing Cast SDK...', 'info');
+
+            window['__onGCastApiAvailable'] = (isAvailable) => {
+                if (isAvailable) {
+                    setupCast();
+                } else {
+                    showStatus('Cast API not available. Please reload the page.', 'error');
+                }
+            };
+
+            // Trigger SDK initialization if already loaded
+            if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+                setupCast();
+            }
+        }
+
+        function setupCast() {
+            try {
+                const sessionRequest = new chrome.cast.SessionRequest(applicationId);
+                const apiConfig = new chrome.cast.ApiConfig(
+                    sessionRequest,
+                    sessionListener,
+                    receiverListener
+                );
+
+                chrome.cast.initialize(
+                    apiConfig,
+                    () => {
+                        console.log('Cast SDK initialized successfully');
+                        showStatus('Cast SDK ready! Click "Start Casting" to begin.', 'success');
+                        document.getElementById('initBtn').classList.add('hidden');
+                        document.getElementById('startBtn').classList.remove('hidden');
+                        document.getElementById('appId').disabled = true;
+                    },
+                    (error) => {
+                        console.error('Cast initialization error:', error);
+                        showStatus('Failed to initialize Cast SDK: ' + error.description, 'error');
+                    }
+                );
+            } catch (error) {
+                console.error('Cast setup error:', error);
+                showStatus('Cast setup error: ' + error.message, 'error');
+            }
+        }
+
+        function sessionListener(session) {
+            console.log('Cast session established:', session);
+            castSession = session;
+
+            castSession.addMessageListener(
+                SCREEN_MIRROR_NAMESPACE,
+                (namespace, message) => {
+                    handleReceiverMessage(JSON.parse(message));
+                }
+            );
+
+            castSession.addUpdateListener((isAlive) => {
+                console.log('Cast session update. Is alive:', isAlive);
+                if (!isAlive) {
+                    cleanup();
+                }
+            });
+        }
+
+        function receiverListener(availability) {
+            console.log('Cast receiver availability:', availability);
+            if (availability === chrome.cast.ReceiverAvailability.AVAILABLE) {
+                showStatus('Cast receivers found on network', 'success');
+            }
+        }
+
+        async function startCasting() {
+            try {
+                const clientName = document.getElementById('clientName').value.trim() || 'Anonymous';
+
+                showStatus('Requesting Cast session...', 'info');
+
+                // Request Cast session
+                chrome.cast.requestSession(
+                    async (session) => {
+                        castSession = session;
+                        console.log('Cast session started:', session);
+
+                        showStatus('Cast session connected. Setting up screen capture...', 'info');
+
+                        // Set up message listener
+                        castSession.addMessageListener(
+                            SCREEN_MIRROR_NAMESPACE,
+                            (namespace, message) => {
+                                handleReceiverMessage(JSON.parse(message));
+                            }
+                        );
+
+                        // Capture screen/tab
+                        await captureAndSetupWebRTC(clientName);
+                    },
+                    (error) => {
+                        console.error('Error requesting Cast session:', error);
+                        showStatus('Failed to start Cast session: ' + error.description, 'error');
+                    }
+                );
+
+            } catch (error) {
+                console.error('Error starting cast:', error);
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function captureAndSetupWebRTC(clientName) {
+            try {
+                // Check if mediaDevices is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    throw new Error('Screen capture not supported in this browser');
+                }
+
+                showStatus('Select screen, window, or tab to share...', 'info');
+
+                // Capture screen/tab
+                localStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: "always",
+                        displaySurface: "monitor"
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    }
+                });
+
+                // Show preview
+                const preview = document.getElementById('preview');
+                preview.srcObject = localStream;
+                preview.classList.add('active');
+
+                showStatus('Setting up WebRTC connection...', 'info');
+
+                // Set up WebRTC peer connection
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                });
+
+                // Add tracks to peer connection
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && castSession) {
+                        // Send ICE candidate to receiver
+                        castSession.sendMessage(
+                            SCREEN_MIRROR_NAMESPACE,
+                            {
+                                type: 'ice-candidate',
+                                candidate: event.candidate
+                            },
+                            () => console.log('ICE candidate sent'),
+                            (error) => console.error('Error sending ICE candidate:', error)
+                        );
+                    }
+                };
+
+                // Create and send offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                // Send offer to receiver via Cast
+                castSession.sendMessage(
+                    SCREEN_MIRROR_NAMESPACE,
+                    {
+                        type: 'offer',
+                        offer: {
+                            type: offer.type,
+                            sdp: offer.sdp
+                        },
+                        clientName: clientName
+                    },
+                    () => {
+                        console.log('WebRTC offer sent to receiver');
+                        showStatus('Waiting for receiver to accept...', 'info');
+                    },
+                    (error) => {
+                        console.error('Error sending offer:', error);
+                        showStatus('Error sending offer to receiver', 'error');
+                    }
+                );
+
+                // Update UI
+                document.getElementById('startBtn').classList.add('hidden');
+                document.getElementById('stopBtn').classList.remove('hidden');
+                document.getElementById('clientName').disabled = true;
+
+                // Handle stream end
+                localStream.getVideoTracks()[0].addEventListener('ended', () => {
+                    stopCasting();
+                });
+
+            } catch (error) {
+                console.error('Error in captureAndSetupWebRTC:', error);
+                showStatus('Error: ' + error.message, 'error');
+                cleanup();
+            }
+        }
+
+        async function handleReceiverMessage(message) {
+            console.log('Message from receiver:', message);
+
+            switch (message.type) {
+                case 'answer':
+                    // Set remote description (answer from receiver)
+                    if (peerConnection && message.answer) {
+                        await peerConnection.setRemoteDescription(
+                            new RTCSessionDescription(message.answer)
+                        );
+                        console.log('WebRTC answer received and set');
+                        showStatus('✓ Connected! Casting screen to receiver', 'success');
+                    }
+                    break;
+            }
+        }
+
+        function stopCasting() {
+            showStatus('Disconnecting...', 'info');
+
+            if (castSession) {
+                castSession.stop(
+                    () => console.log('Cast session stopped'),
+                    (error) => console.error('Error stopping Cast session:', error)
+                );
+            }
+
+            cleanup();
+            showStatus('Disconnected', 'info');
+        }
+
+        function cleanup() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            castSession = null;
+
+            document.getElementById('preview').classList.remove('active');
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.add('hidden');
+            document.getElementById('clientName').disabled = false;
+        }
+
+        // Initialize UI on page load
+        window.addEventListener('load', () => {
+            const hostname = window.location.hostname;
+            document.getElementById('clientName').value = `Device at ${hostname}`;
+
+            // Try to load saved App ID
+            const savedAppId = localStorage.getItem('castAppId');
+            if (savedAppId) {
+                document.getElementById('appId').value = savedAppId;
+            }
+        });
+
+        // Save App ID to localStorage when changed
+        document.getElementById('appId').addEventListener('change', (e) => {
+            localStorage.setItem('castAppId', e.target.value);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (castSession) {
+                castSession.stop();
+            }
+            cleanup();
+        });
+    </script>
+</body>
+</html>

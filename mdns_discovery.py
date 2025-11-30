@@ -61,30 +61,10 @@ class MDNSAdvertiser:
 
             addresses = [socket.inet_aton(local_ip)]
 
-            # Advertise as Cast-compatible device
-            # Chrome looks for _googlecast._tcp services
-            cast_service = ServiceInfo(
-                "_googlecast._tcp.local.",
-                f"{self.name}._googlecast._tcp.local.",
-                addresses=addresses,
-                port=self.port,
-                properties={
-                    'id': self.name.replace(' ', '-').lower(),
-                    'fn': self.name,  # Friendly name
-                    've': '05',  # Version
-                    'md': 'Desktop Casting Receiver',  # Model
-                    'ic': '/icon.png',  # Icon path
-                    'ca': '4101',  # Capabilities
-                    'st': '0',  # State
-                },
-                server=f"{socket.gethostname()}.local."
-            )
+            # NOTE: Google Cast service is now handled by cast_discovery.py
+            # to avoid conflicts. This module only handles WebRTC and HTTP discovery.
 
-            logger.info(f"Registering Cast service: {self.name}")
-            self.zeroconf.register_service(cast_service)
-            self.services.append(cast_service)
-
-            # Also advertise as custom WebRTC service
+            # Advertise as custom WebRTC service
             # This allows custom clients to discover it
             webrtc_service = ServiceInfo(
                 "_webrtc._tcp.local.",
@@ -123,9 +103,10 @@ class MDNSAdvertiser:
             self.services.append(http_service)
 
             self.running = True
-            logger.info("✓ mDNS services registered successfully")
-            logger.info(f"  Chrome/Chromebook should discover: '{self.name}'")
+            logger.info("✓ mDNS services registered successfully (WebRTC & HTTP)")
+            logger.info(f"  Service: '{self.name}'")
             logger.info(f"  Service URL: {self.protocol}://{local_ip}:{self.port}/")
+            logger.info(f"  Note: Google Cast discovery is handled separately by cast_discovery.py")
 
             return True
 

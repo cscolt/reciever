@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 airplay_receiver = None
 uxplay_integration = None
 mdns_advertiser = None
+cast_discovery = None
 
 # Helper function to get base path (works in both dev and PyInstaller)
 def get_base_path():
@@ -246,6 +247,22 @@ async def index(request):
     return web.Response(content_type='text/html', text=content)
 
 
+async def cast_receiver(request):
+    """Serve the Cast receiver HTML page"""
+    cast_receiver_path = os.path.join(get_base_path(), 'cast_receiver.html')
+    with open(cast_receiver_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return web.Response(content_type='text/html', text=content)
+
+
+async def cast_sender(request):
+    """Serve the Cast sender HTML page"""
+    cast_sender_path = os.path.join(get_base_path(), 'cast_sender.html')
+    with open(cast_sender_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return web.Response(content_type='text/html', text=content)
+
+
 async def on_shutdown(app):
     """Cleanup on shutdown"""
     logger.info("Shutting down, closing all connections...")
@@ -257,6 +274,10 @@ def create_app():
     """Create and configure the web application"""
     app = web.Application()
     app.router.add_get('/', index)
+    app.router.add_get('/cast_receiver', cast_receiver)
+    app.router.add_get('/cast_receiver.html', cast_receiver)
+    app.router.add_get('/cast_sender', cast_sender)
+    app.router.add_get('/cast_sender.html', cast_sender)
     app.router.add_post('/offer', offer)
     app.router.add_post('/disconnect', disconnect)
     app.router.add_get('/status', status)
@@ -264,9 +285,9 @@ def create_app():
     return app
 
 
-def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True, enable_mdns=True):
-    """Run the server with optional AirPlay support and mDNS discovery"""
-    global airplay_receiver, mdns_advertiser
+def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True, enable_mdns=True, enable_cast=True):
+    """Run the server with optional AirPlay support, mDNS discovery, and Google Cast"""
+    global airplay_receiver, mdns_advertiser, cast_discovery
 
     app = create_app()
 
@@ -309,6 +330,23 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True, ena
             logger.error(f"Failed to start mDNS discovery: {e}")
             logger.debug("Exception details:", exc_info=True)
 
+    # Start Google Cast discovery
+    if enable_cast:
+        try:
+            from cast_discovery import CastDiscovery
+            cast_discovery = CastDiscovery("Desktop Casting Receiver", port, protocol)
+            if cast_discovery.start():
+                logger.info("✓ Google Cast discovery enabled - receiver will appear in Cast menus")
+                logger.info(f"  Cast receiver URL: {protocol}://{cast_discovery.ip_address}:{port}/cast_receiver")
+            else:
+                logger.warning("Google Cast discovery failed to start")
+        except ImportError:
+            logger.warning("Cast discovery not available (zeroconf required)")
+            logger.info("To enable Cast: pip install zeroconf")
+        except Exception as e:
+            logger.error(f"Failed to start Cast discovery: {e}")
+            logger.debug("Exception details:", exc_info=True)
+
     # Start AirPlay receiver if enabled
     # Try UxPlay first (provides actual iOS screen mirroring), fall back to Python implementation
     if enable_airplay:
@@ -320,7 +358,11 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True, ena
             from uxplay_integration import UxPlayIntegration
             uxplay = UxPlayIntegration(stream_manager, name="Desktop Casting Receiver")
 
-            if uxplay.is_uxplay_available():
+            # TEMPORARY FIX: Force UxPlay to be "unavailable" due to video capture issues
+            # UxPlay connects but doesn't send video frames via the GStreamer pipeline
+            # This makes it fall back to Python AirPlay receiver (has working H.264 decoding)
+            # TODO: Fix UxPlay by using -vrtp flag and RTP/H264 decoder
+            if False and uxplay.is_uxplay_available():  # Temporarily disabled
                 logger.info("UxPlay detected - attempting to start iOS screen mirroring service")
                 if uxplay.start():
                     uxplay_integration = uxplay
@@ -365,6 +407,10 @@ def run_server(host='0.0.0.0', port=8080, use_ssl=True, enable_airplay=True, ena
     if mdns_advertiser:
         logger.info("Stopping mDNS discovery...")
         mdns_advertiser.stop()
+
+    if cast_discovery:
+        logger.info("Stopping Cast discovery...")
+        cast_discovery.stop()
 
     if uxplay_integration:
         logger.info("Stopping UxPlay...")
